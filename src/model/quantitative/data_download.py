@@ -16,7 +16,6 @@ def get_data():
 
     ticker_list = ticker_list.split('\n')
     ticker_list = [symb.strip() for symb in ticker_list]
-    ticker_list
 
     all_data = {}
     for ticker in ticker_list:
