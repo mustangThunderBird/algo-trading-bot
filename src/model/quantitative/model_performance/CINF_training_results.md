@@ -1,11 +1,11 @@
 # Model Training Results for CINF
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0079
+- **RMSE**: 0.0080
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 91.58%
-- **Percentage within ±0.05**: 99.49%
+- **Percentage within ±0.01**: 90.77%
+- **Percentage within ±0.05**: 99.50%
 
 ## Performance Plot
 ![Performance Plot](../imgs/CINF.png)

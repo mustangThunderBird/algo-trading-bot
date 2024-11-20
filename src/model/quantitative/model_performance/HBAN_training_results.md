@@ -1,11 +1,11 @@
 # Model Training Results for HBAN
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0209
+- **RMSE**: 0.0222
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 38.22%
-- **Percentage within ±0.05**: 97.64%
+- **Percentage within ±0.01**: 36.07%
+- **Percentage within ±0.05**: 96.81%
 
 ## Performance Plot
 ![Performance Plot](../imgs/HBAN.png)

@@ -1,10 +1,10 @@
 # Model Training Results for CAH
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0053
+- **RMSE**: 0.0054
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 93.43%
+- **Percentage within ±0.01**: 93.12%
 - **Percentage within ±0.05**: 100.00%
 
 ## Performance Plot

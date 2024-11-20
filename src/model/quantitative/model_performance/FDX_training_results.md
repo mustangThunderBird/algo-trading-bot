@@ -1,11 +1,11 @@
 # Model Training Results for FDX
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0078
+- **RMSE**: 0.0092
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 93.77%
-- **Percentage within ±0.05**: 99.49%
+- **Percentage within ±0.01**: 92.45%
+- **Percentage within ±0.05**: 99.16%
 
 ## Performance Plot
 ![Performance Plot](../imgs/FDX.png)

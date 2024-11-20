@@ -1,10 +1,10 @@
 # Model Training Results for DE
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0053
+- **RMSE**: 0.0050
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 94.28%
+- **Percentage within ±0.01**: 94.13%
 - **Percentage within ±0.05**: 100.00%
 
 ## Performance Plot

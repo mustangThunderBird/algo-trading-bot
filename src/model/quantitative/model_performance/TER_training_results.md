@@ -1,11 +1,11 @@
 # Model Training Results for TER
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0090
+- **RMSE**: 0.0088
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 84.51%
-- **Percentage within ±0.05**: 99.49%
+- **Percentage within ±0.01**: 83.56%
+- **Percentage within ±0.05**: 99.33%
 
 ## Performance Plot
 ![Performance Plot](../imgs/TER.png)

@@ -1,10 +1,10 @@
 # Model Training Results for MOS
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0079
+- **RMSE**: 0.0070
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 88.05%
+- **Percentage within ±0.01**: 89.43%
 - **Percentage within ±0.05**: 100.00%
 
 ## Performance Plot

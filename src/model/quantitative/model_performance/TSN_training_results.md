@@ -1,11 +1,11 @@
 # Model Training Results for TSN
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0063
+- **RMSE**: 0.0065
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 95.29%
-- **Percentage within ±0.05**: 99.83%
+- **Percentage within ±0.01**: 94.13%
+- **Percentage within ±0.05**: 99.66%
 
 ## Performance Plot
 ![Performance Plot](../imgs/TSN.png)

@@ -1,10 +1,10 @@
 # Model Training Results for APH
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0053
+- **RMSE**: 0.0052
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 94.28%
+- **Percentage within ±0.01**: 94.30%
 - **Percentage within ±0.05**: 100.00%
 
 ## Performance Plot

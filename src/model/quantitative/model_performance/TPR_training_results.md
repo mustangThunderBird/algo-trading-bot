@@ -1,11 +1,11 @@
 # Model Training Results for TPR
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0076
+- **RMSE**: 0.0068
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 93.94%
-- **Percentage within ±0.05**: 99.49%
+- **Percentage within ±0.01**: 94.46%
+- **Percentage within ±0.05**: 99.83%
 
 ## Performance Plot
 ![Performance Plot](../imgs/TPR.png)

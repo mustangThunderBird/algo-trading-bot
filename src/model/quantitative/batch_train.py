@@ -1,3 +1,4 @@
+import argparse
 import matplotlib
 import os
 import warnings
@@ -16,6 +17,17 @@ def batch_train(t, d):
     
 
 if __name__ == "__main__":
+    # Argument parser
+    parser = argparse.ArgumentParser(description="Train models with optional data pull.")
+    parser.add_argument('--pull', action='store_true', help="Pull data using data_download.py")
+    args = parser.parse_args()
+
+    # Handle the --pull flag
+    if args.pull:
+        from data_download import get_data
+        print("Pulling data using data_download.py...")
+        get_data()
+
     warnings.filterwarnings('ignore')
     os.system("export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins/platforms")
     matplotlib.use('Agg')

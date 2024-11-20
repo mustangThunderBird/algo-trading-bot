@@ -1,11 +1,11 @@
 # Model Training Results for CTSH
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0063
+- **RMSE**: 0.0054
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 95.96%
-- **Percentage within ±0.05**: 99.66%
+- **Percentage within ±0.01**: 96.98%
+- **Percentage within ±0.05**: 99.83%
 
 ## Performance Plot
 ![Performance Plot](../imgs/CTSH.png)

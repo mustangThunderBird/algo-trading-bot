@@ -1,11 +1,11 @@
 # Model Training Results for ZBH
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0146
+- **RMSE**: 0.0153
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 56.40%
-- **Percentage within ±0.05**: 99.49%
+- **Percentage within ±0.01**: 54.19%
+- **Percentage within ±0.05**: 99.50%
 
 ## Performance Plot
 ![Performance Plot](../imgs/ZBH.png)

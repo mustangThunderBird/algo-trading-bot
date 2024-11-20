@@ -1,10 +1,10 @@
 # Model Training Results for REG
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0045
+- **RMSE**: 0.0052
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 96.80%
+- **Percentage within ±0.01**: 94.13%
 - **Percentage within ±0.05**: 100.00%
 
 ## Performance Plot

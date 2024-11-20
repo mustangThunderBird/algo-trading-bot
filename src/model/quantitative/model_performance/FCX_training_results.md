@@ -1,10 +1,10 @@
 # Model Training Results for FCX
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0096
+- **RMSE**: 0.0097
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 75.25%
+- **Percentage within ±0.01**: 73.99%
 - **Percentage within ±0.05**: 100.00%
 
 ## Performance Plot

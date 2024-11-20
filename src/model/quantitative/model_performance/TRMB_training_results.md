@@ -1,11 +1,11 @@
 # Model Training Results for TRMB
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0064
+- **RMSE**: 0.0076
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 93.10%
-- **Percentage within ±0.05**: 99.83%
+- **Percentage within ±0.01**: 90.94%
+- **Percentage within ±0.05**: 99.66%
 
 ## Performance Plot
 ![Performance Plot](../imgs/TRMB.png)

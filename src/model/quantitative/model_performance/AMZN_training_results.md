@@ -1,11 +1,11 @@
 # Model Training Results for AMZN
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0082
+- **RMSE**: 0.0080
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 87.21%
-- **Percentage within ±0.05**: 99.83%
+- **Percentage within ±0.01**: 86.41%
+- **Percentage within ±0.05**: 100.00%
 
 ## Performance Plot
 ![Performance Plot](../imgs/AMZN.png)

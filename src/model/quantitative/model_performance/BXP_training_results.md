@@ -4,7 +4,7 @@
 - **RMSE**: 0.0091
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 86.03%
+- **Percentage within ±0.01**: 86.24%
 - **Percentage within ±0.05**: 99.66%
 
 ## Performance Plot

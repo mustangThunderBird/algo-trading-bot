@@ -1,10 +1,10 @@
 # Model Training Results for MTB
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0070
+- **RMSE**: 0.0072
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 89.90%
+- **Percentage within ±0.01**: 90.60%
 - **Percentage within ±0.05**: 99.83%
 
 ## Performance Plot

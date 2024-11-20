@@ -1,10 +1,10 @@
 # Model Training Results for GIS
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0040
+- **RMSE**: 0.0037
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 96.46%
+- **Percentage within ±0.01**: 98.15%
 - **Percentage within ±0.05**: 100.00%
 
 ## Performance Plot

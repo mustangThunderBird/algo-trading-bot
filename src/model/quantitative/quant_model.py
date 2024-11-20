@@ -264,7 +264,7 @@ def build_quant_model(ticker:str, data:pd.DataFrame) -> StackingRegressor:
         save_model(stacking_regressor, model_filename)
         return stacking_regressor
     except Exception as e:
-        print(f"Failed to build quant model for {ticker}")
+        print(f"Failed to build quant model for {ticker}... {e}")
         return None
 
 

@@ -1,11 +1,11 @@
 # Model Training Results for ETR
 
 ## Root Mean Squared Error (RMSE)
-- **RMSE**: 0.0050
+- **RMSE**: 0.0070
 
 ## Prediction Accuracy Within Thresholds
-- **Percentage within ±0.01**: 93.77%
-- **Percentage within ±0.05**: 100.00%
+- **Percentage within ±0.01**: 94.46%
+- **Percentage within ±0.05**: 99.66%
 
 ## Performance Plot
 ![Performance Plot](../imgs/ETR.png)
