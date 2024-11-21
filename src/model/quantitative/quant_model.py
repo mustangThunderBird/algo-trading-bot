@@ -121,11 +121,11 @@ def preprocess_ticker_data(data: pd.DataFrame) -> pd.DataFrame:
     data.dropna(inplace=True)
     return data
 
-def build_quant_model(ticker:str, data:pd.DataFrame) -> StackingRegressor:
+def build_quant_model(ticker:str, data:pd.DataFrame, force_rebuild=False) -> StackingRegressor:
     model_filename = os.path.join(os.path.dirname(__file__), 'models', f"{ticker}_quant_model.pkl")
 
     loaded_model = load_model(model_filename)
-    if loaded_model:
+    if loaded_model and not force_rebuild:
         return loaded_model
 
     try:

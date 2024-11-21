@@ -9,14 +9,14 @@ import gc
 
 @profile
 def batch_train(t, d):
-    results = qm.build_quant_model(t, d)
+    results = qm.build_quant_model(t, d, force_rebuild=True)
     if results:
         print(f"Successfully built model for {t}")
     K.clear_session()
     del results
     
 
-if __name__ == "__main__":
+def main():
     # Argument parser
     parser = argparse.ArgumentParser(description="Train models with optional data pull.")
     parser.add_argument('--pull', action='store_true', help="Pull data using data_download.py")
@@ -40,3 +40,5 @@ if __name__ == "__main__":
         batch_train(ticker_symbol, data)
         gc.collect()
     
+if __name__ == "__main__":
+    main()
