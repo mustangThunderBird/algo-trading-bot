@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 class ModelManager:
-    def __init__(self, sentiment_file, quant_model_dir, quant_weight=0.8, qual_weight=0.2):
+    def __init__(self, sentiment_file, quant_model_dir, quant_weight=0.85, qual_weight=0.15):
         self.sentiment_file = sentiment_file
         self.quant_model_dir = quant_model_dir
         self.quant_weight = quant_weight
@@ -45,13 +45,6 @@ class ModelManager:
         sentiments.index = sentiments.index.astype(str)  # Convert the index to strings
         logging.info(f"Loaded sentiment scores for {len(sentiments)} tickers. Index type: {sentiments.index.dtype}")
         return sentiments
-
-
-    def normalize(self, values):
-        """Normalize a series of values to [0, 1]."""
-        min_val = values.min()
-        max_val = values.max()
-        return (values - min_val) / (max_val - min_val)
 
     def make_decisions(self, output_file):
         """Make buy/sell/hold decisions and save them incrementally."""
@@ -79,22 +72,17 @@ class ModelManager:
                     logging.warning(f"No sentiment score found for {ticker}. Skipping.")
                     continue
 
-                # Normalize return and sentiment scores
-                normalized_return = self.normalize(pd.Series([next_day_return]))[0]
-                normalized_sentiment = (sentiment_score + 1) / 2
-                logging.info(f"Normalized scores for {ticker} are {normalized_return*100}% and {sentiment_score}")
-
                 # Compute decision score
                 decision_score = (
-                    self.quant_weight * normalized_return +
-                    self.qual_weight * normalized_sentiment
+                    self.quant_weight * (next_day_return*100) +
+                    self.qual_weight * sentiment_score
                 )
                 logging.info(f"Decision score for {ticker} is {decision_score}")
 
                 # Determine action
-                if decision_score > 0.6:
+                if decision_score > 1:
                     action = "Buy"
-                elif decision_score < 0.4:
+                elif decision_score < 0:
                     action = "Sell"
                 else:
                     action = "Hold"
