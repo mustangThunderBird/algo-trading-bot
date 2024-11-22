@@ -121,7 +121,7 @@ def preprocess_and_update(ticker, data):
         print(df)
     return ticker, df if not isinstance(df, str) else None
 
-def main():
+def determine_sentiments():
     stock_news_frames = fetch_news()
     # Run preprocessing in parallel
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -151,5 +151,4 @@ def main():
     final_scores = pd.DataFrame.from_dict(sentiment_scores, orient='index', columns=['sentiment_score'])
     final_scores.to_csv(os.path.join(os.path.dirname(__file__), 'sentiment_scores.csv'), index=True)
 
-if __name__ == "__main__":
-    main()
+determine_sentiments()

@@ -26,6 +26,7 @@ def run_qualitative_model():
     '''
     try:
         logging.info("Starting qual model execution...")
+        #qual_model.determine_sentiments()
         os.system(f"python3 {QUALITATIVE_MODEL_SCRIPT_PATH}")
         logging.info("Qualitative model execution completed successfully")
     except Exception as e:
@@ -38,7 +39,8 @@ def run_quantitative_model():
     '''
     try:
         logging.info("Starting quant model execution...")
-        os.system(f"python3 {QUANTITATIVE_MODEL_SCRIPT_PATH} --pull")
+        #batch_train.train_models(pull_data=True)
+        os.system(f"python3 {QUANTITATIVE_MODEL_SCRIPT_PATH}")
         logging.info("Quantitative model execution completed successfully")
     except Exception as e:
         logging.error(f"Error running quant model: {e}")

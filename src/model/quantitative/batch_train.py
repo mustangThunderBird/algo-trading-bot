@@ -16,14 +16,8 @@ def batch_train(t, d):
     del results
     
 
-def main():
-    # Argument parser
-    parser = argparse.ArgumentParser(description="Train models with optional data pull.")
-    parser.add_argument('--pull', action='store_true', help="Pull data using data_download.py")
-    args = parser.parse_args()
-
-    # Handle the --pull flag
-    if args.pull:
+def train_models(pull_data=False):
+    if pull_data:
         from data_download import get_data
         print("Pulling data using data_download.py...")
         get_data()
@@ -40,5 +34,5 @@ def main():
         batch_train(ticker_symbol, data)
         gc.collect()
     
-if __name__ == "__main__":
-    main()
+#train_models(pull_data=True)
+train_models()

@@ -4,7 +4,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import os
 import warnings
-import joblib
+import pickle
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 from xgboost import XGBRegressor
@@ -14,6 +14,8 @@ from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import root_mean_squared_error
 import concurrent.futures
+
+os.system("export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins/platforms")
 
 def preprocess_all_stocks_data(filepath:str) -> dict:
     '''
@@ -79,16 +81,18 @@ def compute_macd(series, short_period=12, long_period=26, signal_period=9):
     return macd, signal_line
     
 def save_model(model, filename):
-    joblib.dump(model, filename)
+    with open(filename, 'wb') as f:
+        pickle.dump(model, f)
     print(f"Model saved to {filename}")
-	
+
 def load_model(filename):
     if os.path.exists(filename):
         print(f"Loading model from {filename}")
-        return joblib.load(filename)
+        with open(filename, 'rb') as f:
+            return pickle.load(f)
     else:
         print(f"No model found at {filename}")
-        return None		
+        return None
 
 def preprocess_ticker_data(data: pd.DataFrame) -> pd.DataFrame:
     for col in data.columns:
@@ -261,6 +265,7 @@ def build_quant_model(ticker:str, data:pd.DataFrame, force_rebuild=False) -> Sta
             f.write(f"![Performance Plot](../imgs/{ticker}.png)\n")
 
         #save the model
+        print(f"Saving model for {ticker}. Type: {type(stacking_regressor)}")
         save_model(stacking_regressor, model_filename)
         return stacking_regressor
     except Exception as e:
