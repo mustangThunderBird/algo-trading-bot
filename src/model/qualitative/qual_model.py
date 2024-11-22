@@ -10,7 +10,6 @@ import re
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
-import time
 from random import uniform
 
 #Initalize transformer pipelines
@@ -135,7 +134,7 @@ def determine_sentiments():
             stock_news_frames[ticker] = result
     sentiment_scores = {}
     for ticker, frame in stock_news_frames.items():
-        if frame is not None:
+        if frame is not None and ticker is not None and ticker != '':
             scores = []
             for sentiment in frame['sentiment']:
                 if sentiment == 'NEGATIVE':

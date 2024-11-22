@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import pickle
 import logging
+import model_handler as mh
 
 # Ensure logs directory exists
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
@@ -39,9 +40,12 @@ class ModelManager:
         """Load sentiment scores from the CSV."""
         if not os.path.exists(self.sentiment_file):
             raise FileNotFoundError(f"Sentiment file not found: {self.sentiment_file}")
-        sentiments = pd.read_csv(self.sentiment_file)
-        logging.info(f"Loaded sentiment scores for {len(sentiments)} tickers.")
+        
+        sentiments = pd.read_csv(self.sentiment_file, index_col=0)  # Use the first column as the index
+        sentiments.index = sentiments.index.astype(str)  # Convert the index to strings
+        logging.info(f"Loaded sentiment scores for {len(sentiments)} tickers. Index type: {sentiments.index.dtype}")
         return sentiments
+
 
     def normalize(self, values):
         """Normalize a series of values to [0, 1]."""
@@ -57,30 +61,35 @@ class ModelManager:
             
             # Process models one by one
             for ticker, model in self.model_generator():
+                ticker = str(ticker)
                 logging.info(f"Processing model for ticker: {ticker}")
                 try:
                     # Predict next-day return
-                    next_day_return = model.predict([[ticker]])[0]  # Replace with actual model input
+                    next_day_return = mh.predict_ticker(ticker, model)
+                    logging.info(f"Predicted next day return for {ticker} is {next_day_return*100}%")
                 except Exception as e:
                     logging.error(f"Error predicting for {ticker}: {e}")
                     continue
 
                 # Get sentiment score
-                sentiment_row = self.sentiments[self.sentiments['ticker'] == ticker]
-                if sentiment_row.empty:
+                try:
+                    sentiment_score = self.sentiments.loc[ticker, 'sentiment_score']
+                    logging.info(f"News sentiment score for {ticker} is {sentiment_score}")
+                except KeyError:
                     logging.warning(f"No sentiment score found for {ticker}. Skipping.")
                     continue
-                sentiment_score = sentiment_row['sentiment_score'].values[0]
 
                 # Normalize return and sentiment scores
                 normalized_return = self.normalize(pd.Series([next_day_return]))[0]
                 normalized_sentiment = (sentiment_score + 1) / 2
+                logging.info(f"Normalized scores for {ticker} are {normalized_return*100}% and {sentiment_score}")
 
                 # Compute decision score
                 decision_score = (
                     self.quant_weight * normalized_return +
                     self.qual_weight * normalized_sentiment
                 )
+                logging.info(f"Decision score for {ticker} is {decision_score}")
 
                 # Determine action
                 if decision_score > 0.6:

@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
 import os
-import warnings
 import pickle
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
@@ -13,9 +11,17 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import StackingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import root_mean_squared_error
-import concurrent.futures
+import platform
 
-os.system("export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins/platforms")
+# Suppress TensorFlow logs
+import absl.logging
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+absl.logging.set_verbosity(absl.logging.ERROR)
+
+if os.name == "posix":
+    system_name = platform.system()
+    if system_name == "Linux":
+        os.system("export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins/platforms")
 
 def preprocess_all_stocks_data(filepath:str) -> dict:
     '''
@@ -65,10 +71,10 @@ def compute_rsi(series, period=14):
 def compute_obv(close, volume):
     obv = [0]
     for i in range(1, len(close)):
-        if close[i] > close[i - 1]:
-            obv.append(obv[-1] + volume[i])
-        elif close[i] < close[i - 1]:
-            obv.append(obv[-1] - volume[i])
+        if close.iloc[i] > close.iloc[i - 1]:
+            obv.append(obv[-1] + volume.iloc[i])
+        elif close.iloc[i] < close.iloc[i - 1]:
+            obv.append(obv[-1] - volume.iloc[i])
         else:
             obv.append(obv[-1])
     return pd.Series(obv, index=close.index)
@@ -271,21 +277,3 @@ def build_quant_model(ticker:str, data:pd.DataFrame, force_rebuild=False) -> Sta
     except Exception as e:
         print(f"Failed to build quant model for {ticker}... {e}")
         return None
-
-
-if __name__ == "__main__":
-    warnings.filterwarnings('ignore')
-    os.system("export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins/platforms")
-    matplotlib.use('Agg')
-    filepath = os.path.join(os.path.dirname(__file__), 'all_stock_data.csv')
-    ticker_data = preprocess_all_stocks_data(filepath=filepath)
-
-    # Dictionary to store models
-    ticker_models = {}
-
-    # Function to train a model for a ticker and store it in the dictionary
-    for ticker_symbol, data in ticker_data.items():
-        results = build_quant_model(ticker_symbol, data)
-        ticker_models[ticker_symbol] = results
-
-    print(ticker_models)

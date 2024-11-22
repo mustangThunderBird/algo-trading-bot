@@ -1,6 +1,7 @@
 import argparse
 import matplotlib
 import os
+import platform
 import warnings
 import quant_model as qm
 from tensorflow.keras import backend as K
@@ -23,7 +24,10 @@ def train_models(pull_data=False):
         get_data()
 
     warnings.filterwarnings('ignore')
-    os.system("export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins/platforms")
+    if os.name == "posix":
+        system_name = platform.system()
+        if system_name == "Linux":
+            os.system("export QT_QPA_PLATFORM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/qt5/plugins/platforms")
     matplotlib.use('Agg')
     filepath = os.path.join(os.path.dirname(__file__), 'all_stock_data.csv')
     ticker_data = qm.preprocess_all_stocks_data(filepath=filepath)
