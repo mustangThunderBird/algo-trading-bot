@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem,
-    QFileDialog, QMessageBox, QHeaderView, QGroupBox, QGridLayout, QProgressBar, QSpacerItem, QSizePolicy
+    QFileDialog, QMessageBox, QHeaderView, QGroupBox, QGridLayout, QProgressBar, QSpacerItem, QSizePolicy,
+    QLineEdit, QFormLayout
 )
 from PyQt5.QtCore import Qt, QProcess
 import webbrowser
@@ -8,6 +9,9 @@ import os
 import pandas as pd
 from qt_log_window import LogWindow
 from alpaca.trading.client import TradingClient as tradeapi
+import json
+from cryptography.fernet import Fernet
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -525,16 +529,106 @@ class ReportTab(QWidget):
 class SettingsTab(QWidget):
     def __init__(self):
         super().__init__()
-        layout = QVBoxLayout()
+        self.layout = QVBoxLayout()
+        self.alpaca_credentials_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', "alpaca_credentials.json")
+        self.encryption_key_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', "encryption_key.key")
+
+        # Title
+        self.title_label = QLabel("Alpaca Account Settings")
+        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(self.title_label)
+
+        # Form for API Key and Secret
+        self.form_layout = QFormLayout()
+
+        credentials = self.load_credentials()
+        if not credentials:
+            #if path does not exist leave the fields with placeholder text
+            # API Key Input
+            self.api_key_input = QLineEdit()
+            self.api_key_input.setPlaceholderText("Enter your Alpaca API Key")
+            self.form_layout.addRow("API Key:", self.api_key_input)
+            # API Secret Input
+            self.api_secret_input = QLineEdit()
+            self.api_secret_input.setPlaceholderText("Enter your Alpaca API Secret")
+            self.api_secret_input.setEchoMode(QLineEdit.Password)
+            self.form_layout.addRow("API Secret:", self.api_secret_input)
+        else:
+            # If path exists, pre-fill fields with the decrypted text
+            self.api_key_input = QLineEdit()
+            self.api_key_input.setText(credentials["api_key"])
+            self.form_layout.addRow("API Key:", self.api_key_input)
+
+            self.api_secret_input = QLineEdit()
+            self.api_secret_input.setText(credentials["api_secret"])
+            self.api_secret_input.setEchoMode(QLineEdit.Password)
+            self.form_layout.addRow("API Secret:", self.api_secret_input)
+
+        self.layout.addLayout(self.form_layout)
+
+        # Save Button
+        self.save_button = QPushButton("Save Credentials")
+        self.save_button.setStyleSheet("font-size: 16px; padding: 10px;")
+        self.save_button.clicked.connect(self.save_credentials)
+        self.layout.addWidget(self.save_button, alignment=Qt.AlignCenter)
+
+        # Status Label
+        self.status_label = QLabel("Status: Waiting for input")
+        self.status_label.setStyleSheet("font-size: 16px; color: gray;")
+        self.layout.addWidget(self.status_label, alignment=Qt.AlignCenter)
+
+        self.setLayout(self.layout)
+
+    def load_credentials(self):
+        if not os.path.exists(self.alpaca_credentials_path) or not os.path.exists(self.encryption_key_path):
+            return False
+        try:
+            # Load the encryption key
+            with open(self.encryption_key_path, "rb") as key_file:
+                encryption_key = key_file.read()
+
+            cipher = Fernet(encryption_key)
+
+            # Load and decrypt credentials
+            with open(self.alpaca_credentials_path, "rb") as f:
+                encrypted_data = f.read()
+            decrypted_data = cipher.decrypt(encrypted_data).decode()
+            return json.loads(decrypted_data)
+        except Exception as e:
+            self.status_label.setText(f"Status: Error loading credentials - {str(e)}")
+            self.status_label.setStyleSheet("font-size: 16px; color: red;")
+            return False
         
-        # Placeholder for settings
-        layout.addWidget(QLabel("Settings"))
-        self.graph_button = QPushButton("Do something")
-        self.graph_button.clicked.connect(self.do_something)
-        layout.addWidget(self.graph_button)
-        
-        self.setLayout(layout)
-    
-    def do_something(self):
-        # Placeholder
-        QMessageBox.information(self, "Do Something", "Settings not implemented yet!")
+    def save_credentials(self):
+        api_key = self.api_key_input.text()
+        api_secret = self.api_secret_input.text()
+
+        if not api_key or not api_secret:
+            self.status_label.setText("Status: Please fill in both fields.")
+            self.status_label.setStyleSheet("font-size: 16px; color: red;")
+            return
+
+        try:
+            # Encrypt and save credentials securely
+            encrypted_data = self.encrypt_credentials(api_key, api_secret)
+            with open(self.alpaca_credentials_path, "wb") as f:
+                f.write(encrypted_data)
+            self.status_label.setText("Status: Credentials saved successfully!")
+            self.status_label.setStyleSheet("font-size: 16px; color: green;")
+        except Exception as e:
+            self.status_label.setText(f"Status: Error saving credentials - {str(e)}")
+            self.status_label.setStyleSheet("font-size: 16px; color: red;")
+
+    def encrypt_credentials(self, api_key, api_secret):
+        # Generate a key for encryption
+        encryption_key = Fernet.generate_key()
+        cipher = Fernet(encryption_key)
+
+        # Save the key securely
+        with open(self.encryption_key_path, "wb") as key_file:
+            key_file.write(encryption_key)
+
+        # Encrypt the credentials
+        credentials = json.dumps({"api_key": api_key, "api_secret": api_secret}).encode()
+        return cipher.encrypt(credentials)
