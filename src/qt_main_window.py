@@ -175,7 +175,6 @@ class ManualTrainTab(QWidget):
         self.qual_button.setEnabled(True)
         self.log_window.log_area.appendPlainText(f"{model_name} training completed.")
 
-
 class ScheduleTab(QWidget):
     def __init__(self):
         super().__init__()
@@ -277,20 +276,90 @@ class DecisionTab(QWidget):
 class BuySellTab(QWidget):
     def __init__(self):
         super().__init__()
-        layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("Make Buy Sell Decisions"))
-        self.make_decisions_button = QPushButton("Update Decisions")
+        # Main Layout
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setAlignment(Qt.AlignCenter)
 
-        layout.addWidget(self.make_decisions_button)
+        # Add vertical spacers to balance layout
+        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        self.make_decisions_button.clicked.connect(self.update_decisions)
+        # Custom Title
+        self.title_label = QLabel("Update Buy/Sell Decisions")
+        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.main_layout.addWidget(self.title_label)
 
-        self.setLayout(layout)
+        # Group Box for Update Decisions Button
+        self.group_box = QGroupBox()
+        self.group_box.setStyleSheet("padding: 20px;")
+        self.group_box.setMinimumSize(600, 300)
+        self.group_box_layout = QVBoxLayout()
+
+        # Update Decisions Button
+        self.update_button = QPushButton("Update Decisions")
+        self.update_button.setMinimumSize(250, 60)
+        self.update_button.setStyleSheet("font-size: 18px; padding: 10px;")
+        self.update_button.clicked.connect(self.update_decisions)
+        self.group_box_layout.addWidget(self.update_button, alignment=Qt.AlignCenter)
+
+        # Status Label
+        self.status_label = QLabel("Status: Ready")
+        self.status_label.setStyleSheet("font-size: 18px; color: green; padding: 10px;")
+        self.group_box_layout.addWidget(self.status_label, alignment=Qt.AlignCenter)
+
+        # Progress Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setFixedHeight(25)
+        self.group_box_layout.addWidget(self.progress_bar, alignment=Qt.AlignCenter)
+
+        self.group_box.setLayout(self.group_box_layout)
+        self.main_layout.addWidget(self.group_box)
+
+        # Add vertical spacers to balance layout
+        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Set the main layout
+        self.setLayout(self.main_layout)
 
     def update_decisions(self):
-        #Placeholder: Update decisions
-        QMessageBox.information(self, "Buy/Sell", "Buy/Sell Decisions Made!")
+        # Disable the button and show progress
+        self.update_button.setEnabled(False)
+        self.status_label.setText("Status: Updating decisions...")
+        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+
+        # Show Log Window
+        self.log_window = LogWindow()
+        self.log_window.show()
+
+        # Run decision update logic
+        self.process = QProcess()
+        self.process.setProcessChannelMode(QProcess.MergedChannels)
+        self.process.readyReadStandardOutput.connect(self.update_logs)
+        self.process.finished.connect(self.decisions_complete)
+        self.process.start("python3", [os.path.join(os.path.dirname(__file__), "model", "model_manager.py")])
+        self.log_window.process = self.process
+
+    def update_logs(self):
+        # Update log window with process output
+        output = self.process.readAllStandardOutput().data().decode()
+        self.log_window.log_area.appendPlainText(output)
+
+        # Simulate progress updates
+        self.progress_bar.setValue(min(self.progress_bar.value() + 10, 100))
+
+    def decisions_complete(self):
+        # Re-enable the button and update status
+        self.status_label.setText("Status: Decisions updated successfully!")
+        self.status_label.setStyleSheet("font-size: 18px; color: green;")
+        self.progress_bar.setVisible(False)
+        self.update_button.setEnabled(True)
+
+        # Finalize log window
+        self.log_window.log_area.appendPlainText("Decision-making process completed.")
 
 class PerformanceTab(QWidget):
     def __init__(self):

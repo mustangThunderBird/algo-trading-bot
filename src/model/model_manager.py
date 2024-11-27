@@ -8,18 +8,6 @@ import model_handler as mh
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
 
-# Clear the log file
-with open(os.path.join(LOG_DIR, 'model_manager.log'), 'w') as log_file:
-    log_file.write("") 
-
-# Configure logging to write to a file
-LOG_FILE = os.path.join(LOG_DIR, 'model_manager.log')
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
 class ModelManager:
     def __init__(self, sentiment_file, quant_model_dir, quant_weight=0.85, qual_weight=0.15):
         self.sentiment_file = sentiment_file
@@ -43,7 +31,7 @@ class ModelManager:
         
         sentiments = pd.read_csv(self.sentiment_file, index_col=0)  # Use the first column as the index
         sentiments.index = sentiments.index.astype(str)  # Convert the index to strings
-        logging.info(f"Loaded sentiment scores for {len(sentiments)} tickers. Index type: {sentiments.index.dtype}")
+        print(f"Loaded sentiment scores for {len(sentiments)} tickers. Index type: {sentiments.index.dtype}")
         return sentiments
 
     def make_decisions(self, output_file):
@@ -55,11 +43,11 @@ class ModelManager:
             # Process models one by one
             for ticker, model in self.model_generator():
                 ticker = str(ticker)
-                logging.info(f"Processing model for ticker: {ticker}")
+                print(f"Processing model for ticker: {ticker}")
                 try:
                     # Predict next-day return
                     next_day_return = mh.predict_ticker(ticker, model)
-                    logging.info(f"Predicted next day return for {ticker} is {next_day_return*100}%")
+                    print(f"Predicted next day return for {ticker} is {next_day_return*100}%")
                 except Exception as e:
                     logging.error(f"Error predicting for {ticker}: {e}")
                     continue
@@ -67,7 +55,7 @@ class ModelManager:
                 # Get sentiment score
                 try:
                     sentiment_score = self.sentiments.loc[ticker, 'sentiment_score']
-                    logging.info(f"News sentiment score for {ticker} is {sentiment_score}")
+                    print(f"News sentiment score for {ticker} is {sentiment_score}")
                 except KeyError:
                     logging.warning(f"No sentiment score found for {ticker}. Skipping.")
                     continue
@@ -77,7 +65,7 @@ class ModelManager:
                     self.quant_weight * (next_day_return*100) +
                     self.qual_weight * sentiment_score
                 )
-                logging.info(f"Decision score for {ticker} is {decision_score}")
+                print(f"Decision score for {ticker} is {decision_score}")
 
                 # Determine action
                 if decision_score > 1:
@@ -97,6 +85,6 @@ try:
 
     decisions_file = os.path.join(LOG_DIR, 'buy_sell_decisions.csv')
     model_manager.make_decisions(decisions_file)
-    logging.info(f"Decisions saved to {decisions_file}")
+    print(f"Decisions saved to {decisions_file}")
 except Exception as e:
     logging.error(f"Error in decision making: {e}")
