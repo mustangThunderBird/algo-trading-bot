@@ -1,11 +1,12 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem,
-    QFileDialog, QMessageBox, QHeaderView
+    QFileDialog, QMessageBox, QHeaderView, QGroupBox, QGridLayout, QProgressBar, QSpacerItem, QSizePolicy
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QProcess
 import webbrowser
 import os
 import pandas as pd
+from qt_log_window import LogWindow
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -82,25 +83,98 @@ class WelcomeTab(QWidget):
 class ManualTrainTab(QWidget):
     def __init__(self):
         super().__init__()
-        layout = QVBoxLayout()
-        
-        # Manual Training
-        layout.addWidget(QLabel("Manual Training"))
-        self.train_button = QPushButton("Train Model")
-        self.train_button.clicked.connect(self.train_model)
-        layout.addWidget(self.train_button)
-        
+
+        # Main Layout
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setAlignment(Qt.AlignCenter)
+
+        # Add vertical spacers to balance layout
+        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Custom Title
+        self.title_label = QLabel("Manual Training")
+        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
+        self.title_label.setAlignment(Qt.AlignCenter)  # Center the title label
+        self.main_layout.addWidget(self.title_label)
+
+        # Group Box for Training Buttons
+        self.group_box = QGroupBox()
+        self.group_box.setStyleSheet("padding: 20px;")
+        self.group_box.setMinimumSize(600, 400)
+        self.group_box_layout = QGridLayout()
+
+        # Train Quantitative Model Button
+        self.quant_button = QPushButton("Train Quantitative Model")
+        self.quant_button.setMinimumSize(250, 60)
+        self.quant_button.setStyleSheet("font-size: 18px; padding: 10px;")
+        self.quant_button.clicked.connect(self.train_quant_model)
+        self.group_box_layout.addWidget(self.quant_button, 0, 0)
+
+        # Train Qualitative Model Button
+        self.qual_button = QPushButton("Train Qualitative Model")
+        self.qual_button.setMinimumSize(250, 60)
+        self.qual_button.setStyleSheet("font-size: 18px; padding: 10px;")
+        self.qual_button.clicked.connect(self.train_qual_model)
+        self.group_box_layout.addWidget(self.qual_button, 0, 1)
+
+        # Status Label
         self.status_label = QLabel("Status: Ready")
-        layout.addWidget(self.status_label)
-        
-        self.setLayout(layout)
+        self.status_label.setStyleSheet("font-size: 18px; color: green; padding: 10px;")
+        self.group_box_layout.addWidget(self.status_label, 1, 0, 1, 2, alignment=Qt.AlignCenter)
+
+        # Progress Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setFixedHeight(25)
+        self.group_box_layout.addWidget(self.progress_bar, 2, 0, 1, 2)
+
+        self.group_box.setLayout(self.group_box_layout)
+        self.main_layout.addWidget(self.group_box)
+
+        # Add vertical spacers to balance layout
+        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Set the main layout
+        self.setLayout(self.main_layout)
+
+    def train_quant_model(self):
+        self.run_training_script("python3", os.path.join(os.path.dirname(__file__), 'model', 'quantitative', 'batch_train.py'), "Quantitative Model")
     
-    def train_model(self):
-        # Placeholder: Call model training logic here
-        self.status_label.setText("Status: Training in progress...")
-        # Simulate completion
-        QMessageBox.information(self, "Training", "Model training completed!")
-        self.status_label.setText("Status: Ready")
+    def train_qual_model(self):
+        self.run_training_script("python3", os.path.join(os.path.dirname(__file__), 'model', 'qualitative', 'qual_model.py'), "Qualitative Model")
+
+    def run_training_script(self, interpreter, script_path, model_name):
+        self.quant_button.setEnabled(False)
+        self.qual_button.setEnabled(False)
+
+        self.status_label.setText(f"Status: Training {model_name} in progress...")
+        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+
+        self.log_window = LogWindow()
+        self.log_window.show()
+
+        self.process = QProcess()
+        self.process.setProcessChannelMode(QProcess.MergedChannels)
+        self.process.readyReadStandardOutput.connect(self.update_logs)
+        self.process.finished.connect(lambda: self.training_complete(model_name))
+        self.process.start(interpreter, [script_path])
+        self.log_window.process = self.process
+
+    def update_logs(self):
+        output = self.process.readAllStandardOutput().data().decode()
+        self.log_window.log_area.appendPlainText(output)
+        self.progress_bar.setValue(min(self.progress_bar.value() + 10, 100))
+
+    def training_complete(self, model_name):
+        self.status_label.setText(f"Status: {model_name} training completed.")
+        self.status_label.setStyleSheet("font-size: 18px; color: green;")
+        self.progress_bar.setVisible(False)
+        self.quant_button.setEnabled(True)
+        self.qual_button.setEnabled(True)
+        self.log_window.log_area.appendPlainText(f"{model_name} training completed.")
+
 
 class ScheduleTab(QWidget):
     def __init__(self):
