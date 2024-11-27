@@ -7,6 +7,7 @@ import webbrowser
 import os
 import pandas as pd
 from qt_log_window import LogWindow
+from alpaca.trading.client import TradingClient as tradeapi
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -23,16 +24,20 @@ class MainWindow(QMainWindow):
         self.schedule_tab = ScheduleTab()
         self.buy_sell_tab = BuySellTab()
         self.decision_tab = DecisionTab()
+        self.trade_execution_tab = TradeExecutionTab()
         self.performance_tab = PerformanceTab()
         self.report_tab = ReportTab()
+        self.settings_tab = SettingsTab()
 
         self.tabs.addTab(self.welcome_tab, "Welcome")
         self.tabs.addTab(self.manual_train_tab, "Manual Training")
         self.tabs.addTab(self.schedule_tab, "Scheduled Training")
         self.tabs.addTab(self.buy_sell_tab, "Update Buy/Sell Decisions")
         self.tabs.addTab(self.decision_tab, "View Decisions")
+        self.tabs.addTab(self.trade_execution_tab, "Execute Trades")
         self.tabs.addTab(self.performance_tab, "Performance Graph")
         self.tabs.addTab(self.report_tab, "Reports")
+        self.tabs.addTab(self.settings_tab, "Settings")
 
         # Connect tab change signal to a method
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -361,6 +366,122 @@ class BuySellTab(QWidget):
         # Finalize log window
         self.log_window.log_area.appendPlainText("Decision-making process completed.")
 
+class TradeExecutionTab(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        # Main Layout
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setAlignment(Qt.AlignCenter)
+
+        # Add vertical spacers to balance layout
+        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Custom Title
+        self.title_label = QLabel("Execute Trades")
+        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.main_layout.addWidget(self.title_label)
+
+        # Group Box for Execute Trades Button
+        self.group_box = QGroupBox()
+        self.group_box.setStyleSheet("padding: 20px;")
+        self.group_box.setMinimumSize(600, 300)
+        self.group_box_layout = QVBoxLayout()
+
+        # Execute Trades Button
+        self.execute_button = QPushButton("Execute Trades")
+        self.execute_button.setMinimumSize(250, 60)
+        self.execute_button.setStyleSheet("font-size: 18px; padding: 10px;")
+        self.execute_button.clicked.connect(self.execute_trades)
+        self.group_box_layout.addWidget(self.execute_button, alignment=Qt.AlignCenter)
+
+        # Status Label
+        self.status_label = QLabel("Status: Ready")
+        self.status_label.setStyleSheet("font-size: 18px; color: green; padding: 10px;")
+        self.group_box_layout.addWidget(self.status_label, alignment=Qt.AlignCenter)
+
+        # Progress Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setFixedHeight(25)
+        self.group_box_layout.addWidget(self.progress_bar, alignment=Qt.AlignCenter)
+
+        self.group_box.setLayout(self.group_box_layout)
+        self.main_layout.addWidget(self.group_box)
+
+        # Add vertical spacers to balance layout
+        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Set the main layout
+        self.setLayout(self.main_layout)
+
+    def execute_trades(self):
+        # Disable the button and show progress
+        self.execute_button.setEnabled(False)
+        self.status_label.setText("Status: Executing trades...")
+        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+
+        # Show Log Window
+        self.log_window = LogWindow()
+        self.log_window.show()
+
+        # Start Trade Execution Logic
+        try:
+            self.trade_execution_logic()
+            self.status_label.setText("Status: Trades executed successfully!")
+            self.status_label.setStyleSheet("font-size: 18px; color: green;")
+        except Exception as e:
+            self.status_label.setText(f"Status: Error - {str(e)}")
+            self.status_label.setStyleSheet("font-size: 18px; color: red;")
+        finally:
+            self.progress_bar.setVisible(False)
+            self.execute_button.setEnabled(True)
+
+    def trade_execution_logic(self): 
+        # Configure API (use your API keys here securely)
+        API_KEY = "your_paper_trading_api_key"
+        API_SECRET = "your_paper_trading_secret_key"
+        BASE_URL = "https://paper-api.alpaca.markets"
+
+        api = tradeapi.REST(API_KEY, API_SECRET, BASE_URL, api_version='v2')
+
+        # Load the buy/sell decisions CSV
+        csv_file = "path/to/buy_sell_decisions.csv"  # Update with the correct path
+        decisions = pd.read_csv(csv_file)
+
+        # Loop through the CSV and execute trades
+        for index, row in decisions.iterrows():
+            ticker = row['ticker']
+            action = row['action']
+            quantity = 1  # For simplicity, assume 1 share per trade (can be parameterized)
+
+            try:
+                if action == "Buy":
+                    api.submit_order(
+                        symbol=ticker,
+                        qty=quantity,
+                        side='buy',
+                        type='market',
+                        time_in_force='gtc'
+                    )
+                    self.log_window.log_area.appendPlainText(f"Executed Buy for {ticker}")
+                elif action == "Sell":
+                    api.submit_order(
+                        symbol=ticker,
+                        qty=quantity,
+                        side='sell',
+                        type='market',
+                        time_in_force='gtc'
+                    )
+                    self.log_window.log_area.appendPlainText(f"Executed Sell for {ticker}")
+                else:
+                    self.log_window.log_area.appendPlainText(f"Skipped {ticker} (Hold action)")
+            except Exception as e:
+                self.log_window.log_area.appendPlainText(f"Error executing trade for {ticker}: {str(e)}")
+
 class PerformanceTab(QWidget):
     def __init__(self):
         super().__init__()
@@ -400,3 +521,20 @@ class ReportTab(QWidget):
             QMessageBox.information(self, "Report", f"Report saved to {save_path}!")
         else:
             QMessageBox.warning(self, "Report", "Report saving canceled.")
+
+class SettingsTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        
+        # Placeholder for settings
+        layout.addWidget(QLabel("Settings"))
+        self.graph_button = QPushButton("Do something")
+        self.graph_button.clicked.connect(self.do_something)
+        layout.addWidget(self.graph_button)
+        
+        self.setLayout(layout)
+    
+    def do_something(self):
+        # Placeholder
+        QMessageBox.information(self, "Do Something", "Settings not implemented yet!")
