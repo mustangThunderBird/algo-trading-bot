@@ -8,7 +8,9 @@ import webbrowser
 import os
 import pandas as pd
 from qt_log_window import LogWindow
-from alpaca.trading.client import TradingClient as tradeapi
+from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.enums import OrderSide, TimeInForce
 import json
 from cryptography.fernet import Fernet
 
@@ -172,7 +174,7 @@ class ManualTrainTab(QWidget):
         self.log_window.process = self.process
 
     def update_logs(self):
-        output = self.process.readAllStandardOutput().data().decode()
+        output = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
         self.log_window.log_area.appendPlainText(output)
         self.progress_bar.setValue(min(self.progress_bar.value() + 10, 100))
 
@@ -354,7 +356,7 @@ class BuySellTab(QWidget):
 
     def update_logs(self):
         # Update log window with process output
-        output = self.process.readAllStandardOutput().data().decode()
+        output = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
         self.log_window.log_area.appendPlainText(output)
 
         # Simulate progress updates
@@ -445,15 +447,31 @@ class TradeExecutionTab(QWidget):
             self.execute_button.setEnabled(True)
 
     def trade_execution_logic(self): 
-        # Configure API (use your API keys here securely)
-        API_KEY = "your_paper_trading_api_key"
-        API_SECRET = "your_paper_trading_secret_key"
-        BASE_URL = "https://paper-api.alpaca.markets"
+        settings_tab = self.parentWidget().findChild(SettingsTab)
+        credentials = settings_tab.load_credentials()
+        if not credentials:
+            self.status_label.setText("Status: Failed to load API credentials")
+            self.status_label.setStyleSheet("font-size: 18px; color: red;")
+            return
+        
+        API_KEY = credentials.get("api_key")
+        API_SECRET = credentials.get("api_secret")
+        #BASE_URL = "https://paper-api.alpaca.markets"
 
-        api = tradeapi.REST(API_KEY, API_SECRET, BASE_URL, api_version='v2')
+        trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
+
+        # Validate the credentials
+        if not API_KEY or not API_SECRET:
+            self.status_label.setText("Status: API Key or Secret missing.")
+            self.status_label.setStyleSheet("font-size: 18px; color: red;")
+            return
 
         # Load the buy/sell decisions CSV
-        csv_file = "path/to/buy_sell_decisions.csv"  # Update with the correct path
+        csv_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'buy_sell_decisions.csv')
+        if not os.path.exists(csv_file):
+            self.log_window.log_area.appendPlainText("Error: Buy/Sell decisions file not found.")
+            return
+        
         decisions = pd.read_csv(csv_file)
 
         # Loop through the CSV and execute trades
@@ -464,23 +482,32 @@ class TradeExecutionTab(QWidget):
 
             try:
                 if action == "Buy":
-                    api.submit_order(
+                    market_order_data = MarketOrderRequest(
                         symbol=ticker,
                         qty=quantity,
-                        side='buy',
-                        type='market',
-                        time_in_force='gtc'
+                        side=OrderSide.BUY,
+                        time_in_force=TimeInForce.DAY
                     )
+                    market_order = trading_client.submit_order(order_data=market_order_data)
                     self.log_window.log_area.appendPlainText(f"Executed Buy for {ticker}")
                 elif action == "Sell":
-                    api.submit_order(
-                        symbol=ticker,
-                        qty=quantity,
-                        side='sell',
-                        type='market',
-                        time_in_force='gtc'
-                    )
-                    self.log_window.log_area.appendPlainText(f"Executed Sell for {ticker}")
+                    try:
+                        position = trading_client.get_open_position(ticker)
+                        owned_qty = position.qty
+                        if owned_qty > 0:
+                            market_order_data = MarketOrderRequest(
+                                symbol=ticker,
+                                qty=quantity,
+                                side=OrderSide.SELL,
+                                time_in_force=TimeInForce.DAY
+                            )
+                            market_order = trading_client.submit_order(order_data=market_order_data)
+                            self.log_window.log_area.appendPlainText(f"Executed Sell for {ticker}")
+                        else:
+                           self.log_window.log_area.appendPlainText(f"Skipped Sell for {ticker} (No shares owned)")
+                    except Exception as e:
+                        # Handle cases where the position does not exist
+                        self.log_window.log_area.appendPlainText(f"Skipped Sell for {ticker} (No position found): {str(e)}")
                 else:
                     self.log_window.log_area.appendPlainText(f"Skipped {ticker} (Hold action)")
             except Exception as e:
