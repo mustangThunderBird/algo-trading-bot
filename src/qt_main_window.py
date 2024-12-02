@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import (
     QFileDialog, QMessageBox, QHeaderView, QGroupBox, QGridLayout, QProgressBar, QSpacerItem, QSizePolicy,
     QLineEdit, QFormLayout
 )
+from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtCore import Qt, QProcess
 import webbrowser
 import os
@@ -189,28 +190,105 @@ class ManualTrainTab(QWidget):
 class ScheduleTab(QWidget):
     def __init__(self):
         super().__init__()
-        layout = QVBoxLayout()
-        
-        # Scheduler Controls
-        layout.addWidget(QLabel("Schedule Automated Training"))
+
+        # Main Layout
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setAlignment(Qt.AlignCenter)
+
+        # Add vertical spacers to balance layout
+        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Custom Title
+        self.title_label = QLabel("Schedule Automated Tasks")
+        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
+        self.title_label.setAlignment(Qt.AlignCenter)  # Center the title label
+        self.main_layout.addWidget(self.title_label)
+
+        # Group Box for Scheduler Buttons
+        self.group_box = QGroupBox()
+        self.group_box.setStyleSheet("padding: 20px;")
+        self.group_box.setMinimumSize(600, 400)
+        self.group_box_layout = QGridLayout()
+
+        # Start Scheduler Button
         self.start_button = QPushButton("Start Scheduler")
-        self.stop_button = QPushButton("Stop Scheduler")
-        
-        layout.addWidget(self.start_button)
-        layout.addWidget(self.stop_button)
-        
+        self.start_button.setMinimumSize(250, 60)
+        self.start_button.setStyleSheet("font-size: 18px; padding: 10px;")
         self.start_button.clicked.connect(self.start_scheduler)
+        self.group_box_layout.addWidget(self.start_button, 0, 0)
+
+        # Stop Scheduler Button
+        self.stop_button = QPushButton("Stop Scheduler")
+        self.stop_button.setMinimumSize(250, 60)
+        self.stop_button.setStyleSheet("font-size: 18px; padding: 10px;")
         self.stop_button.clicked.connect(self.stop_scheduler)
-        
-        self.setLayout(layout)
-    
+        self.stop_button.setEnabled(False)
+        self.group_box_layout.addWidget(self.stop_button, 0, 1)
+
+        # Status Label
+        self.status_label = QLabel("Status: Scheduler is stopped")
+        self.status_label.setStyleSheet("font-size: 18px; color: red; padding: 10px;")
+        self.group_box_layout.addWidget(self.status_label, 1, 0, 1, 2, alignment=Qt.AlignCenter)
+
+        # Status Indicator (LED-like)
+        self.status_indicator = QLabel()
+        self.status_indicator.setFixedSize(30, 30)
+        self.update_status_indicator("red")  # Default to red
+        self.group_box_layout.addWidget(self.status_indicator, 2, 0, 1, 2, alignment=Qt.AlignCenter)
+
+        self.group_box.setLayout(self.group_box_layout)
+        self.main_layout.addWidget(self.group_box)
+
+        # Add vertical spacers to balance layout
+        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        # Set the main layout
+        self.setLayout(self.main_layout)
+
+        # Process for running the scheduler script
+        self.process = None
+
     def start_scheduler(self):
-        # Placeholder: Integrate scheduler logic
-        QMessageBox.information(self, "Scheduler", "Scheduler started!")
-    
+        # Disable start button and enable stop button
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+        self.status_label.setText("Status: Scheduler is running...")
+        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
+        self.update_status_indicator("green")
+
+        # Start the scheduler script
+        scheduler_script = os.path.join(os.path.dirname(__file__), "scheduler.py")
+        self.process = QProcess()
+        self.process.setProcessChannelMode(QProcess.MergedChannels)
+        self.process.readyReadStandardOutput.connect(self.update_logs)
+        self.process.finished.connect(self.scheduler_stopped)
+        self.process.start("python3", [scheduler_script])
+
     def stop_scheduler(self):
-        # Placeholder: Integrate scheduler stop logic
-        QMessageBox.information(self, "Scheduler", "Scheduler stopped!")
+        if self.process and self.process.state() == QProcess.Running:
+            self.process.terminate()
+            self.process.waitForFinished()
+            self.scheduler_stopped()
+
+    def update_logs(self):
+        output = self.process.readAllStandardOutput().data().decode("utf-8", errors="replace")
+        # Optionally, you can append logs to a log viewer widget or file
+
+    def scheduler_stopped(self):
+        # Enable start button and disable stop button
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+        self.status_label.setText("Status: Scheduler is stopped")
+        self.status_label.setStyleSheet("font-size: 18px; color: red;")
+        self.update_status_indicator("red")
+
+    def update_status_indicator(self, color):
+        """
+        Updates the LED-like status indicator.
+        """
+        pixmap = QPixmap(30, 30)
+        pixmap.fill(QColor(color))
+        self.status_indicator.setPixmap(pixmap)
 
 class DecisionTab(QWidget):
     def __init__(self):

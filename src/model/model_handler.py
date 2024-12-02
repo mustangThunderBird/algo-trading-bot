@@ -47,14 +47,3 @@ def predict_ticker(ticker, model):
     except Exception as e:
         logging.error(f"Error predicting for {ticker}: {e}")
         return None
-    
-# if __name__ == "__main__":
-#     logging.basicConfig(level=logging.ERROR)
-
-#     ticker = "INTC"
-#     model_path = "/home/crisco/source/repos/gradschool/capstone/algo-trading-bot/src/model/quantitative/models/INTC_quant_model.pkl"
-#     with open(model_path, 'rb') as f:
-#         model = pickle.load(f)
-
-#     prediction = predict_ticker(ticker, model)
-#     print(f"Prediction for {ticker}: {prediction}")

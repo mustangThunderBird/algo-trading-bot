@@ -5,6 +5,7 @@ import logging
 
 QUALITATIVE_MODEL_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'model', 'qualitative', 'qual_model.py')
 QUANTITATIVE_MODEL_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'model', 'quantitative', 'batch_train.py')
+TRADE_EXECUTION_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'trade_execution.py')
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -45,11 +46,23 @@ def run_quantitative_model():
     except Exception as e:
         logging.error(f"Error running quant model: {e}")
 
+def run_trade_execution():
+    '''
+    Function to execute trades based on the decisions
+    '''
+    try:
+        logging.info("Starting trade execution...")
+        os.system(f"python3 {TRADE_EXECUTION_SCRIPT_PATH}")
+        logging.info("Trade execution completed successfully")
+    except Exception as e:
+        logging.error(f"Error during trade execution: {e}")
+
 def main():
     scheduler = BackgroundScheduler()
 
     scheduler.add_job(run_qualitative_model, 'cron', day_of_week="mon-fri", hour=4)
     scheduler.add_job(run_quantitative_model, 'cron', day_of_week='sat', hour=10)
+    scheduler.add_job(run_trade_execution, 'cron', hour=9)
 
     scheduler.start()
     logging.info("Scheduler started successfully. Press Ctrl+C to exit.")
