@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem,
     QFileDialog, QMessageBox, QHeaderView, QGroupBox, QGridLayout, QProgressBar, QSpacerItem, QSizePolicy,
-    QLineEdit, QFormLayout
+    QLineEdit, QFormLayout, QApplication
 )
 from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtCore import Qt, QProcess, QThread, pyqtSignal
@@ -11,11 +11,13 @@ import webbrowser
 import os
 import pandas as pd
 import yfinance as yf
+import matplotlib.pyplot as plt
 from qt_log_window import LogWindow
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 import json
+from fpdf import FPDF
 from cryptography.fernet import Fernet
 
 
@@ -721,24 +723,158 @@ class ReportTab(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout()
-        
-        # Report Download
-        layout.addWidget(QLabel("Download Performance Report"))
+
+        # Title
+        title = QLabel("Download Performance Report")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(title)
+
+        # Button to generate the report
         self.download_button = QPushButton("Download Report")
-        self.download_button.clicked.connect(self.download_report)
+        self.download_button.clicked.connect(self.generate_report)
         layout.addWidget(self.download_button)
-        
+
         self.setLayout(layout)
-    
-    def download_report(self):
-        # Placeholder: Implement report generation logic
-        file_dialog = QFileDialog()
-        save_path, _ = file_dialog.getSaveFileName(self, "Save Report", "", "CSV Files (*.csv);;All Files (*)")
-        if save_path:
-            # Simulate saving a report
-            QMessageBox.information(self, "Report", f"Report saved to {save_path}!")
-        else:
-            QMessageBox.warning(self, "Report", "Report saving canceled.")
+
+    def fetch_portfolio_data(self):
+        """Fetch current positions from Alpaca API."""
+        settings_tab = self.parentWidget().findChild(SettingsTab)
+        credentials = settings_tab.load_credentials()
+        if not credentials:
+            raise ValueError("Failed to load API credentials")
+        
+        API_KEY = credentials.get("api_key")
+        API_SECRET = credentials.get("api_secret")
+        if not API_KEY or not API_SECRET:
+            raise ValueError("Missing API Key or Secret in credentials.")
+
+        trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
+        positions = trading_client.get_all_positions()
+
+        # Parse positions into a DataFrame
+        data = {
+            "Ticker": [pos.symbol for pos in positions],
+            "Quantity": [float(pos.qty) for pos in positions]
+        }
+        portfolio_df = pd.DataFrame(data)
+        portfolio_df["Price"] = portfolio_df["Ticker"].apply(lambda ticker: yf.Ticker(ticker).info.get("regularMarketPrice", 0))
+        return portfolio_df
+
+    def fetch_sp500_data(self):
+        """Fetch historical S&P 500 data."""
+        sp500 = yf.Ticker("^GSPC")
+        hist = sp500.history(period="1mo")
+        return hist["Close"]
+
+    def generate_report(self):
+        # Set up a loading message
+        self.loading_label = QLabel("Loading report, please wait...")
+        self.loading_label.setAlignment(Qt.AlignCenter)
+        self.loading_label.setStyleSheet("font-size: 18px; font-weight: bold; color: orange;")
+        self.layout().addWidget(self.loading_label)
+
+        # Ensure the GUI updates immediately
+        QApplication.processEvents()
+
+        try:
+            # Fetch portfolio data
+            portfolio_df = self.fetch_portfolio_data()
+
+            # Compute the percentage allocation based on quantities
+            portfolio_df["Percentage"] = portfolio_df["Quantity"] / portfolio_df["Quantity"].sum() * 100
+
+            # Filter out rows where 'Percentage' is NaN or zero
+            valid_portfolio = portfolio_df[portfolio_df["Percentage"] > 0]
+
+            if valid_portfolio.empty:
+                QMessageBox.warning(self, "Error", "No valid data available for asset allocation.")
+                self.layout().removeWidget(self.loading_label)
+                self.loading_label.deleteLater()
+                return
+
+            # Pie chart: Asset allocation
+            pie_fig, pie_ax = plt.subplots(figsize=(6, 4))
+            valid_portfolio.set_index("Ticker")["Percentage"].plot.pie(
+                ax=pie_ax, autopct="%1.1f%%", startangle=90
+            )
+            pie_ax.set_title("Asset Allocation")
+            pie_ax.set_ylabel("")
+
+            # Fetch performance data for S&P 500
+            sp500_data = self.fetch_sp500_data()
+            sp500_data.index = pd.to_datetime(sp500_data.index)
+
+            # Fetch historical data for portfolio stocks
+            tickers = portfolio_df["Ticker"].tolist()
+            quantities = portfolio_df.set_index("Ticker")["Quantity"].to_dict()
+
+            portfolio_values = pd.DataFrame(index=sp500_data.index)
+            for ticker in tickers:
+                try:
+                    stock_data = yf.Ticker(ticker).history(start=sp500_data.index.min(), end=sp500_data.index.max())
+                    stock_data = stock_data.reindex(sp500_data.index, method="ffill")  # Align with S&P 500 index
+                    portfolio_values[ticker] = stock_data["Close"] * quantities[ticker]
+                except Exception as e:
+                    print(f"Failed to fetch data for {ticker}: {e}")
+
+            # Calculate total portfolio value over time
+            portfolio_values["Total"] = portfolio_values.sum(axis=1)
+
+            # Calculate returns for portfolio and S&P 500
+            portfolio_returns = portfolio_values["Total"].pct_change().dropna() * 100
+            sp500_returns = sp500_data.pct_change().dropna() * 100
+
+            # Line chart: Portfolio returns vs. S&P 500 returns
+            perf_fig, perf_ax = plt.subplots(figsize=(6, 4))
+            sp500_returns.plot(ax=perf_ax, label="S&P 500 Returns", color="blue")
+            portfolio_returns.plot(ax=perf_ax, label="Portfolio Returns", color="orange")
+            perf_ax.set_title("Returns Comparison")
+            perf_ax.set_xlabel("Date")
+            perf_ax.set_ylabel("Returns (%)")
+            perf_ax.legend()
+
+            # Save charts as temporary files
+            pie_path = "pie_chart.png"
+            perf_path = "returns_chart.png"
+            pie_fig.savefig(pie_path)
+            perf_fig.savefig(perf_path)
+            plt.close(pie_fig)
+            plt.close(perf_fig)
+
+            # Create PDF
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+
+            pdf.cell(200, 10, txt="Performance Report", ln=True, align="C")
+
+            # Add pie chart
+            pdf.cell(200, 10, txt="Asset Allocation", ln=True, align="C")
+            pdf.image(pie_path, x=10, y=30, w=190)
+
+            # Add returns graph
+            pdf.add_page()
+            pdf.cell(200, 10, txt="Returns Comparison", ln=True, align="C")
+            pdf.image(perf_path, x=10, y=30, w=190)
+
+            # Save PDF
+            save_path, _ = QFileDialog.getSaveFileName(self, "Save Report", "", "PDF Files (*.pdf);;All Files (*)")
+            if save_path:
+                pdf.output(save_path)
+                QMessageBox.information(self, "Report Saved", f"Report saved to {save_path}.")
+            else:
+                QMessageBox.warning(self, "Save Canceled", "Report saving was canceled.")
+
+            # Clean up temporary files
+            os.remove(pie_path)
+            os.remove(perf_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred while generating the report: {e}")
+        finally:
+            # Remove the loading message
+            self.layout().removeWidget(self.loading_label)
+            self.loading_label.deleteLater()
 
 class SettingsTab(QWidget):
     def __init__(self):
