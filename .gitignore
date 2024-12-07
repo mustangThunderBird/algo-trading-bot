@@ -167,4 +167,4 @@ data/
 *.png
 *.pkl
 *.key
-*alpaca_credentials.json
+credentials/
