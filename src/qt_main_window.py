@@ -4,10 +4,13 @@ from PyQt5.QtWidgets import (
     QLineEdit, QFormLayout
 )
 from PyQt5.QtGui import QColor, QPixmap
-from PyQt5.QtCore import Qt, QProcess
+from PyQt5.QtCore import Qt, QProcess, QThread, pyqtSignal
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 import webbrowser
 import os
 import pandas as pd
+import yfinance as yf
 from qt_log_window import LogWindow
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
@@ -53,6 +56,8 @@ class MainWindow(QMainWindow):
         # Check if the "View Decisions" tab is selected
         if self.tabs.tabText(index) == "View Decisions":
             self.decision_tab.load_decisions_from_csv()  # Load data only when this tab is clicked
+        elif self.tabs.tabText(index) == "Performance Graph":
+            self.performance_tab.plot_graph()
 
 class WelcomeTab(QWidget):
     def __init__(self):
@@ -68,14 +73,16 @@ class WelcomeTab(QWidget):
         # Instructional Message
         instructions = QLabel(
             "Explore the tabs above to get started with the bot.\n"
-            "Click on the Help tab to learn more about how to use the dashboard."
+            "Click on the GitHub Wiki button to learn more about how to use the dashboard.\n"
+            "This app requires an alpaca trade API account in order to work. If you do not have an alpaca\n"
+            "account, you can visit the sign up page by clicking on the Alpaca button below"
         )
         instructions.setAlignment(Qt.AlignCenter)
         instructions.setStyleSheet("font-size: 16px; margin: 10px;")
         layout.addWidget(instructions)
         
         # Button to Open GitHub
-        github_button = QPushButton("Visit GitHub Repository")
+        github_button = QPushButton("Visit GitHub Wiki")
         github_button.setStyleSheet("font-size: 16px; padding: 10px;")
         github_button.setFixedWidth(400)
         github_button.clicked.connect(self.open_github)
@@ -84,13 +91,27 @@ class WelcomeTab(QWidget):
         button_layout.addWidget(github_button)
         button_layout.setAlignment(Qt.AlignCenter)
         layout.addLayout(button_layout)
+
+        # Button to Open GitHub
+        alpaca_button = QPushButton("Visit Alpaca")
+        alpaca_button.setStyleSheet("font-size: 16px; padding: 10px;")
+        alpaca_button.setFixedWidth(400)
+        alpaca_button.clicked.connect(self.open_github)
+        # Center the button
+        button_layout = QVBoxLayout()
+        button_layout.addWidget(alpaca_button)
+        button_layout.setAlignment(Qt.AlignCenter)
+        layout.addLayout(button_layout)
         
         # Set the layout
         layout.setAlignment(Qt.AlignTop)
         self.setLayout(layout)
     
     def open_github(self):
-        webbrowser.open("https://github.com/mustangThunderBird/algo-trading-bot")
+        webbrowser.open("https://github.com/mustangThunderBird/algo-trading-bot/wiki")
+    
+    def open_alpaca(self):
+        webbrowser.open("https://alpaca.markets/")
         
 class ManualTrainTab(QWidget):
     def __init__(self):
@@ -534,7 +555,6 @@ class TradeExecutionTab(QWidget):
         
         API_KEY = credentials.get("api_key")
         API_SECRET = credentials.get("api_secret")
-        #BASE_URL = "https://paper-api.alpaca.markets"
 
         trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
 
@@ -591,22 +611,111 @@ class TradeExecutionTab(QWidget):
             except Exception as e:
                 self.log_window.log_area.appendPlainText(f"Error executing trade for {ticker}: {str(e)}")
 
+class DataFetchThread(QThread):
+    data_fetched = pyqtSignal(pd.DataFrame)
+
+    def __init__(self, positions, parent=None):
+        super().__init__(parent)
+        self.positions = positions
+
+    def run(self):
+        try:
+            data = {}
+            for _, row in self.positions.iterrows():
+                ticker = row['Ticker']
+                quantity = row['Quantity']
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="1mo", interval="1d")  # Daily data
+                if hist.empty:
+                    continue
+                data[ticker] = hist['Close'] * quantity
+            
+            portfolio_data = pd.DataFrame(data)
+            portfolio_data['Portfolio Value'] = portfolio_data.sum(axis=1)
+
+            # Resample to reduce resolution
+            portfolio_data = portfolio_data.resample('W').mean()
+
+            self.data_fetched.emit(portfolio_data)
+        except Exception as e:
+            self.data_fetched.emit(None)
+
 class PerformanceTab(QWidget):
     def __init__(self):
         super().__init__()
-        layout = QVBoxLayout()
+        self.layout = QVBoxLayout()
+
+        # Title
+        title = QLabel("Portfolio Performance - Last 1 Month")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px;")
+        self.layout.addWidget(title)
+
+        # Canvas for the graph
+        self.canvas = FigureCanvas(Figure(figsize=(10, 5)))
+        self.ax = self.canvas.figure.add_subplot(111)  # Create an axis for later use
+        self.layout.addWidget(self.canvas)
+
+        # Button to refresh graph
+        self.refresh_button = QPushButton("Refresh Graph")
+        self.refresh_button.clicked.connect(self.plot_graph)
+        self.layout.addWidget(self.refresh_button)
+
+        # Set layout
+        self.setLayout(self.layout)
+
+    def fetch_positions(self):
+        """Fetch current positions from Alpaca API."""
+        settings_tab = self.parentWidget().findChild(SettingsTab)
+        credentials = settings_tab.load_credentials()
+        if not credentials:
+            raise ValueError("Failed to load API credentials")
         
-        # Placeholder for performance graph
-        layout.addWidget(QLabel("Performance Graph"))
-        self.graph_button = QPushButton("Show Graph")
-        self.graph_button.clicked.connect(self.show_graph)
-        layout.addWidget(self.graph_button)
-        
-        self.setLayout(layout)
-    
-    def show_graph(self):
-        # Placeholder: Call graph generation logic
-        QMessageBox.information(self, "Graph", "Graph generation not implemented yet!")
+        API_KEY = credentials.get("api_key")
+        API_SECRET = credentials.get("api_secret")
+        if not API_KEY or not API_SECRET:
+            raise ValueError("Missing API Key or Secret in credentials.")
+
+        trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
+        positions = trading_client.get_all_positions()
+
+        # Parse positions into a DataFrame
+        data = {
+            "Ticker": [pos.symbol for pos in positions],
+            "Quantity": [float(pos.qty) for pos in positions]
+        }
+        return pd.DataFrame(data)
+
+    def plot_graph(self):
+        """Initiate data fetch and plot graph."""
+        try:
+            # Display loading message
+            self.ax.clear()
+            self.ax.text(0.5, 0.5, 'LOADING...', fontsize=24, ha='center', va='center', transform=self.ax.transAxes)
+            self.canvas.draw()
+
+            # Fetch positions and start background thread
+            positions = self.fetch_positions()
+            self.thread = DataFetchThread(positions)
+            self.thread.data_fetched.connect(self.on_data_fetched)
+            self.thread.start()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not fetch portfolio data: {e}")
+
+    def on_data_fetched(self, portfolio_data):
+        """Handle data fetched by the thread."""
+        if portfolio_data is None:
+            QMessageBox.critical(self, "Error", "Failed to fetch portfolio data.")
+            return
+
+        self.ax.clear()  # Clear loading text
+        self.ax.plot(portfolio_data.index, portfolio_data['Portfolio Value'], label="Portfolio Value", linewidth=2)
+        self.ax.set_title("Portfolio Performance - Last 1 Month")
+        self.ax.set_xlabel("Date")
+        self.ax.set_ylabel("Portfolio Value")
+        self.ax.legend(loc="upper left")
+        self.ax.grid(True)
+        self.canvas.draw()
 
 class ReportTab(QWidget):
     def __init__(self):
