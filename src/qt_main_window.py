@@ -19,6 +19,7 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 import json
 from fpdf import FPDF
 from cryptography.fernet import Fernet
+from app import VERSION
 
 
 class MainWindow(QMainWindow):
@@ -104,6 +105,10 @@ class WelcomeTab(QWidget):
         button_layout.addWidget(alpaca_button)
         button_layout.setAlignment(Qt.AlignCenter)
         layout.addLayout(button_layout)
+
+        verison = QLabel(f"\n\nApp Version: {VERSION}")
+        verison.setAlignment(Qt.AlignCenter)
+        layout.addWidget(verison)
         
         # Set the layout
         layout.setAlignment(Qt.AlignTop)

@@ -5,6 +5,8 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
 import qt_main_window as mw
 
+VERSION = "0.0.1"
+
 if __name__ == "__main__":
     if os.name == "posix":
         sys_name = platform.system()
