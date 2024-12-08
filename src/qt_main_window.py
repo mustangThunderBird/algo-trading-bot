@@ -19,7 +19,7 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 import json
 from fpdf import FPDF
 from cryptography.fernet import Fernet
-from app import VERSION
+from app import VERSION, PYTHON_EXECUTABLE
 
 
 class MainWindow(QMainWindow):
@@ -99,12 +99,12 @@ class WelcomeTab(QWidget):
         alpaca_button = QPushButton("Visit Alpaca")
         alpaca_button.setStyleSheet("font-size: 16px; padding: 10px;")
         alpaca_button.setFixedWidth(400)
-        alpaca_button.clicked.connect(self.open_github)
+        alpaca_button.clicked.connect(self.open_alpaca)
         # Center the button
-        button_layout = QVBoxLayout()
-        button_layout.addWidget(alpaca_button)
-        button_layout.setAlignment(Qt.AlignCenter)
-        layout.addLayout(button_layout)
+        button1_layout = QVBoxLayout()
+        button1_layout.addWidget(alpaca_button)
+        button1_layout.setAlignment(Qt.AlignCenter)
+        layout.addLayout(button1_layout)
 
         verison = QLabel(f"\n\nApp Version: {VERSION}")
         verison.setAlignment(Qt.AlignCenter)
@@ -178,10 +178,10 @@ class ManualTrainTab(QWidget):
         self.setLayout(self.main_layout)
 
     def train_quant_model(self):
-        self.run_training_script("python3", os.path.join(os.path.dirname(__file__), 'model', 'quantitative', 'batch_train.py'), "Quantitative Model")
+        self.run_training_script(PYTHON_EXECUTABLE, os.path.join(os.path.dirname(__file__), 'model', 'quantitative', 'batch_train.py'), "Quantitative Model")
     
     def train_qual_model(self):
-        self.run_training_script("python3", os.path.join(os.path.dirname(__file__), 'model', 'qualitative', 'qual_model.py'), "Qualitative Model")
+        self.run_training_script(PYTHON_EXECUTABLE, os.path.join(os.path.dirname(__file__), 'model', 'qualitative', 'qual_model.py'), "Qualitative Model")
 
     def run_training_script(self, interpreter, script_path, model_name):
         self.quant_button.setEnabled(False)
@@ -205,7 +205,7 @@ class ManualTrainTab(QWidget):
     def update_logs(self):
         output = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
         self.log_window.log_area.appendPlainText(output)
-        self.progress_bar.setValue(min(self.progress_bar.value() + 10, 100))
+        self.progress_bar.setValue(min(self.progress_bar.value() + 1, 100))
 
     def training_complete(self, model_name):
         self.status_label.setText(f"Status: {model_name} training completed.")
@@ -276,21 +276,30 @@ class ScheduleTab(QWidget):
         # Process for running the scheduler script
         self.process = None
 
-    def start_scheduler(self):
-        # Disable start button and enable stop button
-        self.start_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
-        self.status_label.setText("Status: Scheduler is running...")
-        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
-        self.update_status_indicator("green")
+    def capture_errors(self):
+        error_output = self.process.readAllStandardError().data().decode("utf-8", errors="replace")
+        print(f"Scheduler error: {error_output}")
 
-        # Start the scheduler script
-        scheduler_script = os.path.join(os.path.dirname(__file__), "scheduler.py")
-        self.process = QProcess()
-        self.process.setProcessChannelMode(QProcess.MergedChannels)
-        self.process.readyReadStandardOutput.connect(self.update_logs)
-        self.process.finished.connect(self.scheduler_stopped)
-        self.process.start("python3", [scheduler_script])
+    def start_scheduler(self):
+        try:
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
+            self.status_label.setText("Status: Scheduler is running...")
+            self.status_label.setStyleSheet("font-size: 18px; color: orange;")
+            self.update_status_indicator("green")
+
+            # Start the scheduler script
+            scheduler_script = os.path.join(os.path.dirname(__file__), "scheduler.py")
+            self.process = QProcess()
+            self.process.setProcessChannelMode(QProcess.MergedChannels)
+            self.process.readyReadStandardOutput.connect(self.update_logs)
+            self.process.readyReadStandardError.connect(self.capture_errors)
+            self.process.finished.connect(self.scheduler_stopped)
+            self.process.start(PYTHON_EXECUTABLE, [scheduler_script])
+        except Exception as e:
+            self.status_label.setText(f"Error: {str(e)}")
+            self.update_status_indicator("red")
+            print(f"Scheduler start error: {str(e)}")
 
     def stop_scheduler(self):
         if self.process and self.process.state() == QProcess.Running:
@@ -300,7 +309,6 @@ class ScheduleTab(QWidget):
 
     def update_logs(self):
         output = self.process.readAllStandardOutput().data().decode("utf-8", errors="replace")
-        # Optionally, you can append logs to a log viewer widget or file
 
     def scheduler_stopped(self):
         # Enable start button and disable stop button
@@ -457,16 +465,14 @@ class BuySellTab(QWidget):
         self.process.setProcessChannelMode(QProcess.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.update_logs)
         self.process.finished.connect(self.decisions_complete)
-        self.process.start("python3", [os.path.join(os.path.dirname(__file__), "model", "model_manager.py")])
+        self.process.start(PYTHON_EXECUTABLE, [os.path.join(os.path.dirname(__file__), "model", "model_manager.py")])
         self.log_window.process = self.process
 
     def update_logs(self):
         # Update log window with process output
         output = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
         self.log_window.log_area.appendPlainText(output)
-
-        # Simulate progress updates
-        self.progress_bar.setValue(min(self.progress_bar.value() + 10, 100))
+        self.progress_bar.setValue(min(self.progress_bar.value() + 1, 100))
 
     def decisions_complete(self):
         # Re-enable the button and update status

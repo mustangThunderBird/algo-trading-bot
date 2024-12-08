@@ -58,6 +58,7 @@ def run_trade_execution():
         logging.error(f"Error during trade execution: {e}")
 
 def main():
+    print("here")
     scheduler = BackgroundScheduler()
 
     scheduler.add_job(run_qualitative_model, 'cron', day_of_week="mon-fri", hour=4)
