@@ -15,7 +15,7 @@ The Quant/Qual Trading Bot is an advanced algorithmic trading application that c
     - Create an account with [Alpaca Markets](https://alpaca.markets/) for trading api access
 ### Installation
 - The app is distributed as an executable
-    - Download the `.exe` or `.pkg` file from the release section.
+    - Download the `.exe` or `.app` file from the release section.
 
 ## Getting Started
 ### Step 1: Load Tickers
