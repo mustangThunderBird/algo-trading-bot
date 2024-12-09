@@ -120,8 +120,17 @@ def preprocess_and_update(ticker, data):
         print(df)
     return ticker, df if not isinstance(df, str) else None
 
-def determine_sentiments():
+def determine_sentiments(progress_callback=None):
     stock_news_frames = fetch_news()
+    total_tickers = len(stock_news_frames)
+    
+    # Counter for progress tracking
+    completed_tickers = 0
+
+    def update_progress():
+        if progress_callback and total_tickers > 0:
+            progress_callback((completed_tickers / total_tickers) * 100)
+
     # Run preprocessing in parallel
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {
@@ -132,6 +141,12 @@ def determine_sentiments():
         for future in as_completed(futures):
             ticker, result = future.result()
             stock_news_frames[ticker] = result
+            
+            # Increment the progress counter and update progress
+            completed_tickers += 1
+            update_progress()
+
+    # Calculate sentiment scores
     sentiment_scores = {}
     for ticker, frame in stock_news_frames.items():
         if frame is not None and ticker is not None and ticker != '':
@@ -141,13 +156,13 @@ def determine_sentiments():
                     scores.append(-1)
                 elif sentiment == 'POSITIVE':
                     scores.append(1)
-            if scores != []:
-                sentiment_scores[ticker] = sum(scores) / len(scores)
-            else:
-                sentiment_scores[ticker] = 0
+            sentiment_scores[ticker] = sum(scores) / len(scores) if scores else 0
         else:
             sentiment_scores[ticker] = 0
+
+    # Save sentiment scores to a CSV file
     final_scores = pd.DataFrame.from_dict(sentiment_scores, orient='index', columns=['sentiment_score'])
     final_scores.to_csv(os.path.join(os.path.dirname(__file__), 'sentiment_scores.csv'), index=True)
 
-determine_sentiments()
+if __name__ == "__main__":
+    determine_sentiments()

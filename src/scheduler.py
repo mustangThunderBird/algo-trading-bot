@@ -1,11 +1,10 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-import time
+from model.qualitative import qual_model
+from model.quantitative import batch_train
+from model.model_manager import ModelManager
+import trade_execution
 import os
 import logging
-
-QUALITATIVE_MODEL_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'model', 'qualitative', 'qual_model.py')
-QUANTITATIVE_MODEL_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'model', 'quantitative', 'batch_train.py')
-TRADE_EXECUTION_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'trade_execution.py')
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -20,60 +19,79 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-def run_qualitative_model():
-    '''
-    Function to run the qual model
-    and get new sentiment scores
-    '''
-    try:
-        logging.info("Starting qual model execution...")
-        #qual_model.determine_sentiments()
-        os.system(f"python3 {QUALITATIVE_MODEL_SCRIPT_PATH}")
-        logging.info("Qualitative model execution completed successfully")
-    except Exception as e:
-        logging.error(f"Error running qual model: {e}")
+class Scheduler:
+    def __init__(self):
+        self.running = False
+        self.scheduler = None
 
-def run_quantitative_model():
-    '''
-    Function to run the quantitative model
-    and get new real stock data
-    '''
-    try:
-        logging.info("Starting quant model execution...")
-        #batch_train.train_models(pull_data=True)
-        os.system(f"python3 {QUANTITATIVE_MODEL_SCRIPT_PATH}")
-        logging.info("Quantitative model execution completed successfully")
-    except Exception as e:
-        logging.error(f"Error running quant model: {e}")
+    def run_qualitative_model(self):
+        '''
+        Function to run the qualitative model and get new sentiment scores.
+        '''
+        try:
+            logging.info("Starting qualitative model execution...")
+            qual_model.determine_sentiments()
+            logging.info("Qualitative model execution completed successfully")
+        except Exception as e:
+            logging.error(f"Error running qualitative model: {e}")
 
-def run_trade_execution():
-    '''
-    Function to execute trades based on the decisions
-    '''
-    try:
-        logging.info("Starting trade execution...")
-        os.system(f"python3 {TRADE_EXECUTION_SCRIPT_PATH}")
-        logging.info("Trade execution completed successfully")
-    except Exception as e:
-        logging.error(f"Error during trade execution: {e}")
+    def run_quantitative_model(self):
+        '''
+        Function to run the quantitative model and get new real stock data.
+        '''
+        try:
+            logging.info("Starting quantitative model execution...")
+            batch_train.train_models()
+            logging.info("Quantitative model execution completed successfully")
+        except Exception as e:
+            logging.error(f"Error running quantitative model: {e}")
 
-def main():
-    print("here")
-    scheduler = BackgroundScheduler()
+    def run_trade_execution(self):
+        '''
+        Function to execute trades based on the decisions.
+        '''
+        try:
+            logging.info("Starting trade execution...")
+            sentiment_file = os.path.join(os.path.dirname(__file__), 'qualitative', 'sentiment_scores.csv')
+            model_dir = os.path.join(os.path.dirname(__file__), 'quantitative', 'models')
+            mm = ModelManager(sentiment_file, model_dir)
+            decisions_file = os.path.join(LOG_DIR, 'buy_sell_decisions.csv')
+            mm.make_decisions(decisions_file)
+            trade_execution.execute_trades()  # Call the function directly
+            logging.info("Trade execution completed successfully")
+        except Exception as e:
+            logging.error(f"Error during trade execution: {e}")
 
-    scheduler.add_job(run_qualitative_model, 'cron', day_of_week="mon-fri", hour=4)
-    scheduler.add_job(run_quantitative_model, 'cron', day_of_week='sat', hour=10)
-    scheduler.add_job(run_trade_execution, 'cron', hour=9)
+    def start(self):
+        if self.running:
+            print("Scheduler is already running.")
+            return
 
-    scheduler.start()
-    logging.info("Scheduler started successfully. Press Ctrl+C to exit.")
+        print("Starting scheduler...")
+        self.running = True
 
-    try:
-        while True:
-            time.sleep(1)  # Keep the script running
-    except (KeyboardInterrupt, SystemExit):
-        logging.info("Shutting down scheduler...")
-        scheduler.shutdown()
+        # Initialize the BackgroundScheduler and add jobs
+        self.scheduler = BackgroundScheduler()
+        self.scheduler.add_job(self.run_qualitative_model, 'cron', day_of_week="mon-fri", hour=4)
+        self.scheduler.add_job(self.run_quantitative_model, 'cron', day_of_week='sat', hour=10)
+        self.scheduler.add_job(self.run_trade_execution, 'cron', hour=9)
 
-if __name__ == "__main__":
-    main()
+        self.scheduler.start()
+        logging.info("Scheduler started successfully.")
+        print("Scheduler started successfully.")
+
+    def stop(self):
+        if not self.running:
+            print("Scheduler is not running.")
+            return
+
+        print("Stopping scheduler...")
+        try:
+            self.scheduler.shutdown(wait=True)  # Wait for jobs to finish
+            logging.info("Scheduler stopped successfully.")
+            print("Scheduler stopped successfully.")
+        except Exception as e:
+            logging.error(f"Error during scheduler shutdown: {e}")
+            print(f"Error stopping scheduler: {e}")
+        finally:
+            self.running = False

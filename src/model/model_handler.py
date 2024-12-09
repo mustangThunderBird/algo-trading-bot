@@ -3,7 +3,7 @@ import logging
 import pickle
 import pandas as pd
 import yfinance as yf
-from quantitative.quant_model import preprocess_ticker_data
+from model.quantitative.quant_model import preprocess_ticker_data
 
 # Suppress TensorFlow logs
 import absl.logging

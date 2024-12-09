@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QLineEdit, QFormLayout, QApplication
 )
 from PyQt5.QtGui import QColor, QPixmap
-from PyQt5.QtCore import Qt, QProcess, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import webbrowser
@@ -12,14 +12,19 @@ import os
 import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
-from qt_log_window import LogWindow
+from scheduler import Scheduler
+import trade_execution 
+from model.model_manager import ModelManager
+from model.quantitative import batch_train
+from model.qualitative import qual_model
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 import json
+import traceback
 from fpdf import FPDF
 from cryptography.fernet import Fernet
-from app import VERSION, PYTHON_EXECUTABLE
+from app import VERSION
 
 
 class MainWindow(QMainWindow):
@@ -31,10 +36,12 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
+        self.scheduler = Scheduler()
+
         # Create tabs
         self.welcome_tab = WelcomeTab()
         self.manual_train_tab = ManualTrainTab()
-        self.schedule_tab = ScheduleTab()
+        self.schedule_tab = ScheduleTab(self.scheduler)
         self.buy_sell_tab = BuySellTab()
         self.decision_tab = DecisionTab()
         self.trade_execution_tab = TradeExecutionTab()
@@ -119,7 +126,29 @@ class WelcomeTab(QWidget):
     
     def open_alpaca(self):
         webbrowser.open("https://alpaca.markets/")
-        
+
+class TrainingWorker(QThread):
+    progress = pyqtSignal(int)  # Signal for progress updates
+    finished = pyqtSignal(str)  # Signal when training is finished
+    error = pyqtSignal(str)  # Signal for errors
+
+    def __init__(self, train_func, model_name, parent=None):
+        super().__init__(parent)
+        self.train_func = train_func
+        self.model_name = model_name
+        self._stop_requested = False
+
+    def run(self):
+        try:
+            self.train_func(progress_callback=lambda progress: self.progress.emit(int(progress)))
+            self.finished.emit(f"{self.model_name} Training Completed.")
+        except Exception as e:
+            self.error.emit(f"Error in {self.model_name} Training: {e}")
+    
+    def stop(self):
+        """Request the worker to stop."""
+        self._stop_requested = True
+
 class ManualTrainTab(QWidget):
     def __init__(self):
         super().__init__()
@@ -177,75 +206,101 @@ class ManualTrainTab(QWidget):
         # Set the main layout
         self.setLayout(self.main_layout)
 
-    def train_quant_model(self):
-        self.run_training_script(PYTHON_EXECUTABLE, os.path.join(os.path.dirname(__file__), 'model', 'quantitative', 'batch_train.py'), "Quantitative Model")
-    
-    def train_qual_model(self):
-        self.run_training_script(PYTHON_EXECUTABLE, os.path.join(os.path.dirname(__file__), 'model', 'qualitative', 'qual_model.py'), "Qualitative Model")
+        self.worker = None
 
-    def run_training_script(self, interpreter, script_path, model_name):
+    def train_quant_model(self):
+        self._start_training(batch_train.train_models, "Quantitative Model")
+
+    def train_qual_model(self):
+        self._start_training(qual_model.determine_sentiments, "Qualitative Model")
+
+    def _start_training(self, train_func, model_name):
+        # Disable buttons and show progress
         self.quant_button.setEnabled(False)
         self.qual_button.setEnabled(False)
-
-        self.status_label.setText(f"Status: Training {model_name} in progress...")
-        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
+        self.status_label.setText(f"Status: {model_name} Training in Progress...")
+        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
 
-        self.log_window = LogWindow()
-        self.log_window.show()
+        # Create and start the worker thread
+        self.worker = TrainingWorker(train_func, model_name)
+        self.worker.progress.connect(self._update_progress) 
+        self.worker.finished.connect(self._training_complete)
+        self.worker.error.connect(self._training_error)
+        self.worker.start()
 
-        self.process = QProcess()
-        self.process.setProcessChannelMode(QProcess.MergedChannels)
-        self.process.readyReadStandardOutput.connect(self.update_logs)
-        self.process.finished.connect(lambda: self.training_complete(model_name))
-        self.process.start(interpreter, [script_path])
-        self.log_window.process = self.process
+    def _update_progress(self, value):
+        self.progress_bar.setValue(value)
 
-    def update_logs(self):
-        output = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
-        self.log_window.log_area.appendPlainText(output)
-        self.progress_bar.setValue(min(self.progress_bar.value() + 1, 100))
-
-    def training_complete(self, model_name):
-        self.status_label.setText(f"Status: {model_name} training completed.")
+    def _training_complete(self, message):
+        self.status_label.setText(message)
         self.status_label.setStyleSheet("font-size: 18px; color: green;")
+        self.progress_bar.setValue(100)
         self.progress_bar.setVisible(False)
         self.quant_button.setEnabled(True)
         self.qual_button.setEnabled(True)
-        self.log_window.log_area.appendPlainText(f"{model_name} training completed.")
+
+    def _training_error(self, error_message):
+        self.status_label.setText(error_message)
+        self.status_label.setStyleSheet("font-size: 18px; color: red;")
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(False)
+        self.quant_button.setEnabled(True)
+        self.qual_button.setEnabled(True)
+
+class SchedulerThread(QThread):
+    scheduler_started = pyqtSignal()
+    scheduler_stopped = pyqtSignal()
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, scheduler):
+        super().__init__()
+        self.scheduler = scheduler
+        self._stop_requested = False  # Use internal flag for stopping
+
+    def run(self):
+        try:
+            self._stop_requested = False
+            self.scheduler_started.emit()
+            self.scheduler.start()
+            while not self._stop_requested:
+                # Ensure scheduler loop handles periodic tasks
+                QThread.msleep(100)  # Prevent high CPU usage
+        except Exception as e:
+            error_message = f"Error in scheduler: {str(e)}\n{traceback.format_exc()}"
+            self.error_occurred.emit(error_message)
+        finally:
+            self.scheduler.stop()  # Ensure proper cleanup
+            self.scheduler_stopped.emit()
+
+    def stop(self):
+        self._stop_requested = True  # Signal the thread to stop
 
 class ScheduleTab(QWidget):
-    def __init__(self):
+    def __init__(self, scheduler):
         super().__init__()
 
         # Main Layout
         self.main_layout = QVBoxLayout()
         self.main_layout.setAlignment(Qt.AlignCenter)
 
-        # Add vertical spacers to balance layout
-        self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
-
-        # Custom Title
         self.title_label = QLabel("Schedule Automated Tasks")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
-        self.title_label.setAlignment(Qt.AlignCenter)  # Center the title label
+        self.title_label.setAlignment(Qt.AlignCenter)
         self.main_layout.addWidget(self.title_label)
 
-        # Group Box for Scheduler Buttons
         self.group_box = QGroupBox()
         self.group_box.setStyleSheet("padding: 20px;")
         self.group_box.setMinimumSize(600, 400)
         self.group_box_layout = QGridLayout()
 
-        # Start Scheduler Button
         self.start_button = QPushButton("Start Scheduler")
         self.start_button.setMinimumSize(250, 60)
         self.start_button.setStyleSheet("font-size: 18px; padding: 10px;")
         self.start_button.clicked.connect(self.start_scheduler)
         self.group_box_layout.addWidget(self.start_button, 0, 0)
 
-        # Stop Scheduler Button
         self.stop_button = QPushButton("Stop Scheduler")
         self.stop_button.setMinimumSize(250, 60)
         self.stop_button.setStyleSheet("font-size: 18px; padding: 10px;")
@@ -253,70 +308,56 @@ class ScheduleTab(QWidget):
         self.stop_button.setEnabled(False)
         self.group_box_layout.addWidget(self.stop_button, 0, 1)
 
-        # Status Label
         self.status_label = QLabel("Status: Scheduler is stopped")
         self.status_label.setStyleSheet("font-size: 18px; color: red; padding: 10px;")
         self.group_box_layout.addWidget(self.status_label, 1, 0, 1, 2, alignment=Qt.AlignCenter)
 
-        # Status Indicator (LED-like)
-        self.status_indicator = QLabel()
-        self.status_indicator.setFixedSize(30, 30)
-        self.update_status_indicator("red")  # Default to red
-        self.group_box_layout.addWidget(self.status_indicator, 2, 0, 1, 2, alignment=Qt.AlignCenter)
-
         self.group_box.setLayout(self.group_box_layout)
         self.main_layout.addWidget(self.group_box)
 
-        # Add vertical spacers to balance layout
         self.main_layout.addSpacerItem(QSpacerItem(20, 100, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # Set the main layout
         self.setLayout(self.main_layout)
 
-        # Process for running the scheduler script
-        self.process = None
-
-    def capture_errors(self):
-        error_output = self.process.readAllStandardError().data().decode("utf-8", errors="replace")
-        print(f"Scheduler error: {error_output}")
+        self.scheduler = scheduler 
+        self.scheduler_thread = None
 
     def start_scheduler(self):
-        try:
-            self.start_button.setEnabled(False)
-            self.stop_button.setEnabled(True)
-            self.status_label.setText("Status: Scheduler is running...")
-            self.status_label.setStyleSheet("font-size: 18px; color: orange;")
-            self.update_status_indicator("green")
+        if self.scheduler_thread and self.scheduler_thread.isRunning():
+            return  # Prevent multiple threads
 
-            # Start the scheduler script
-            scheduler_script = os.path.join(os.path.dirname(__file__), "scheduler.py")
-            self.process = QProcess()
-            self.process.setProcessChannelMode(QProcess.MergedChannels)
-            self.process.readyReadStandardOutput.connect(self.update_logs)
-            self.process.readyReadStandardError.connect(self.capture_errors)
-            self.process.finished.connect(self.scheduler_stopped)
-            self.process.start(PYTHON_EXECUTABLE, [scheduler_script])
-        except Exception as e:
-            self.status_label.setText(f"Error: {str(e)}")
-            self.update_status_indicator("red")
-            print(f"Scheduler start error: {str(e)}")
+        self.scheduler_thread = SchedulerThread(self.scheduler)
+        self.scheduler_thread.scheduler_started.connect(self.on_scheduler_started)
+        self.scheduler_thread.scheduler_stopped.connect(self.on_scheduler_stopped)
+        self.scheduler_thread.error_occurred.connect(self.on_scheduler_error)
+
+        self.scheduler_thread.start()
 
     def stop_scheduler(self):
-        if self.process and self.process.state() == QProcess.Running:
-            self.process.terminate()
-            self.process.waitForFinished()
-            self.scheduler_stopped()
+        if self.scheduler_thread and self.scheduler_thread.isRunning():
+            self.scheduler_thread.stop()
+            self.scheduler_thread.wait(5000)  # Wait with timeout (5s)
+            if self.scheduler_thread.isRunning():
+                QMessageBox.warning(self, "Warning", "Failed to stop scheduler in time.")
+        else:
+            QMessageBox.warning(self, "Warning", "Scheduler is not running.")
 
-    def update_logs(self):
-        output = self.process.readAllStandardOutput().data().decode("utf-8", errors="replace")
+    def on_scheduler_started(self):
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+        self.status_label.setText("Status: Scheduler is running...")
+        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
 
-    def scheduler_stopped(self):
-        # Enable start button and disable stop button
+    def on_scheduler_stopped(self):
+        QApplication.processEvents() 
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.status_label.setText("Status: Scheduler is stopped")
         self.status_label.setStyleSheet("font-size: 18px; color: red;")
-        self.update_status_indicator("red")
+
+    def on_scheduler_error(self, error_message):
+        QMessageBox.critical(self, "Scheduler Error", error_message)
+        self.on_scheduler_stopped()
 
     def update_status_indicator(self, color):
         """
@@ -399,7 +440,7 @@ class DecisionTab(QWidget):
         header.setSectionResizeMode(QHeaderView.Stretch)
 
 class BuySellTab(QWidget):
-    def __init__(self):
+    def __init__(self, ):
         super().__init__()
 
         # Main Layout
@@ -433,12 +474,6 @@ class BuySellTab(QWidget):
         self.status_label.setStyleSheet("font-size: 18px; color: green; padding: 10px;")
         self.group_box_layout.addWidget(self.status_label, alignment=Qt.AlignCenter)
 
-        # Progress Bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setFixedHeight(25)
-        self.group_box_layout.addWidget(self.progress_bar, alignment=Qt.AlignCenter)
-
         self.group_box.setLayout(self.group_box_layout)
         self.main_layout.addWidget(self.group_box)
 
@@ -449,30 +484,36 @@ class BuySellTab(QWidget):
         self.setLayout(self.main_layout)
 
     def update_decisions(self):
-        # Disable the button and show progress
-        self.update_button.setEnabled(False)
-        self.status_label.setText("Status: Updating decisions...")
-        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
+        # Paths for required files and directories
+        sentiment_file = os.path.join(os.path.dirname(__file__), 'model', 'qualitative', 'sentiment_scores.csv')
+        model_dir = os.path.join(os.path.dirname(__file__), 'model', 'quantitative', 'models')
 
-        # Show Log Window
-        self.log_window = LogWindow()
-        self.log_window.show()
+        # Check if sentiment scores file exists
+        if not os.path.exists(sentiment_file):
+            QMessageBox.critical(self, "Error", "Sentiment scores CSV file is missing. Please train the qualitative model first.")
+            return
 
-        # Run decision update logic
-        self.process = QProcess()
-        self.process.setProcessChannelMode(QProcess.MergedChannels)
-        self.process.readyReadStandardOutput.connect(self.update_logs)
-        self.process.finished.connect(self.decisions_complete)
-        self.process.start(PYTHON_EXECUTABLE, [os.path.join(os.path.dirname(__file__), "model", "model_manager.py")])
-        self.log_window.process = self.process
+        # Check if the models directory exists and is not empty
+        if not os.path.exists(model_dir) or not os.listdir(model_dir):
+            QMessageBox.critical(self, "Error", "Quantitative models directory is missing or empty. Please train the quantitative model first.")
+            return
 
-    def update_logs(self):
-        # Update log window with process output
-        output = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
-        self.log_window.log_area.appendPlainText(output)
-        self.progress_bar.setValue(min(self.progress_bar.value() + 1, 100))
+        self.status_label.setText("Updating Buy/Sell Decisions...")
+        try:
+            # Ensure logs directory exists
+            LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
+            os.makedirs(LOG_DIR, exist_ok=True)
+
+            # Initialize the model manager and generate decisions
+            model_manager = ModelManager(sentiment_file, model_dir)
+            decisions_file = os.path.join(LOG_DIR, 'buy_sell_decisions.csv')
+            model_manager.make_decisions(decisions_file)
+
+            self.status_label.setText("Decisions Updated Successfully.")
+        except Exception as e:
+            print(f"Error in updating decisions: {e}")
+            QMessageBox.critical(self, "Error", f"An error occurred while updating decisions: {e}")
+            self.status_label.setText("Error in Updating Decisions.")
 
     def decisions_complete(self):
         # Re-enable the button and update status
@@ -480,9 +521,6 @@ class BuySellTab(QWidget):
         self.status_label.setStyleSheet("font-size: 18px; color: green;")
         self.progress_bar.setVisible(False)
         self.update_button.setEnabled(True)
-
-        # Finalize log window
-        self.log_window.log_area.appendPlainText("Decision-making process completed.")
 
 class TradeExecutionTab(QWidget):
     def __init__(self):
@@ -535,94 +573,28 @@ class TradeExecutionTab(QWidget):
         self.setLayout(self.main_layout)
 
     def execute_trades(self):
-        # Disable the button and show progress
-        self.execute_button.setEnabled(False)
-        self.status_label.setText("Status: Executing trades...")
-        self.status_label.setStyleSheet("font-size: 18px; color: orange;")
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-
-        # Show Log Window
-        self.log_window = LogWindow()
-        self.log_window.show()
-
-        # Start Trade Execution Logic
+        self.status_label.setText("Executing Trades...")
         try:
-            self.trade_execution_logic()
-            self.status_label.setText("Status: Trades executed successfully!")
-            self.status_label.setStyleSheet("font-size: 18px; color: green;")
+            status = trade_execution.execute_trades()
+            if status == 0: 
+                QMessageBox.information(self, "Success", "Trades Executed Successfully.")
+                self.status_label.setStyleSheet("font-size: 18px; color: green;")
+                self.status_label.setText("Trades Executed Successfully.")
+            elif status == -1:
+                QMessageBox.critical(self, "Error", "Failed to load API credentials.")
+                self.status_label.setStyleSheet("font-size: 18px; color: red;")
+                self.status_label.setText("Failed to load API credentials.")
+            elif status == -2:
+                QMessageBox.critical(self, "Error", "API Key or Secret missing.")
+                self.status_label.setStyleSheet("font-size: 18px; color: red;")
+                self.status_label.setText("API Key or Secret missing.")
+            elif status == -3:
+                QMessageBox.critical(self, "Error", "Buy/Sell decisions file not found.")
+                self.status_label.setStyleSheet("font-size: 18px; color: red;")
+                self.status_label.setText("Buy/Sell decisions file not found.")
         except Exception as e:
-            self.status_label.setText(f"Status: Error - {str(e)}")
-            self.status_label.setStyleSheet("font-size: 18px; color: red;")
-        finally:
-            self.progress_bar.setVisible(False)
-            self.execute_button.setEnabled(True)
-
-    def trade_execution_logic(self): 
-        settings_tab = self.parentWidget().findChild(SettingsTab)
-        credentials = settings_tab.load_credentials()
-        if not credentials:
-            self.status_label.setText("Status: Failed to load API credentials")
-            self.status_label.setStyleSheet("font-size: 18px; color: red;")
-            return
-        
-        API_KEY = credentials.get("api_key")
-        API_SECRET = credentials.get("api_secret")
-
-        trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-
-        # Validate the credentials
-        if not API_KEY or not API_SECRET:
-            self.status_label.setText("Status: API Key or Secret missing.")
-            self.status_label.setStyleSheet("font-size: 18px; color: red;")
-            return
-
-        # Load the buy/sell decisions CSV
-        csv_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'buy_sell_decisions.csv')
-        if not os.path.exists(csv_file):
-            self.log_window.log_area.appendPlainText("Error: Buy/Sell decisions file not found.")
-            return
-        
-        decisions = pd.read_csv(csv_file)
-
-        # Loop through the CSV and execute trades
-        for index, row in decisions.iterrows():
-            ticker = row['ticker']
-            action = row['action']
-            quantity = 1  # For simplicity, assume 1 share per trade (can be parameterized)
-
-            try:
-                if action == "Buy":
-                    market_order_data = MarketOrderRequest(
-                        symbol=ticker,
-                        qty=quantity,
-                        side=OrderSide.BUY,
-                        time_in_force=TimeInForce.DAY
-                    )
-                    market_order = trading_client.submit_order(order_data=market_order_data)
-                    self.log_window.log_area.appendPlainText(f"Executed Buy for {ticker}")
-                elif action == "Sell":
-                    try:
-                        position = trading_client.get_open_position(ticker)
-                        owned_qty = position.qty
-                        if owned_qty > 0:
-                            market_order_data = MarketOrderRequest(
-                                symbol=ticker,
-                                qty=quantity,
-                                side=OrderSide.SELL,
-                                time_in_force=TimeInForce.DAY
-                            )
-                            market_order = trading_client.submit_order(order_data=market_order_data)
-                            self.log_window.log_area.appendPlainText(f"Executed Sell for {ticker}")
-                        else:
-                           self.log_window.log_area.appendPlainText(f"Skipped Sell for {ticker} (No shares owned)")
-                    except Exception as e:
-                        # Handle cases where the position does not exist
-                        self.log_window.log_area.appendPlainText(f"Skipped Sell for {ticker} (No position found): {str(e)}")
-                else:
-                    self.log_window.log_area.appendPlainText(f"Skipped {ticker} (Hold action)")
-            except Exception as e:
-                self.log_window.log_area.appendPlainText(f"Error executing trade for {ticker}: {str(e)}")
+            print(f"Error in trade execution: {e}")
+            self.status_label.setText("Error in Trade Execution.")
 
 class DataFetchThread(QThread):
     data_fetched = pyqtSignal(pd.DataFrame)

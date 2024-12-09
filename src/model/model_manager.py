@@ -2,7 +2,9 @@ import pandas as pd
 import os
 import pickle
 import logging
-import model_handler as mh
+#import model_handler as mh
+from model import model_handler as mh
+import sys
 
 # Ensure logs directory exists
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
@@ -78,13 +80,14 @@ class ModelManager:
                 # Write decision to file
                 f.write(f"{ticker},{next_day_return},{sentiment_score},{decision_score},{action}\n")
 
-try:
-    sentiment_file = os.path.join(os.path.dirname(__file__), 'qualitative', 'sentiment_scores.csv')
-    model_dir = os.path.join(os.path.dirname(__file__), 'quantitative', 'models')
-    model_manager = ModelManager(sentiment_file, model_dir)
+if __name__ == "__main__" and not hasattr(sys, 'frozen'):
+    try:
+        sentiment_file = os.path.join(os.path.dirname(__file__), 'qualitative', 'sentiment_scores.csv')
+        model_dir = os.path.join(os.path.dirname(__file__), 'quantitative', 'models')
+        model_manager = ModelManager(sentiment_file, model_dir)
 
-    decisions_file = os.path.join(LOG_DIR, 'buy_sell_decisions.csv')
-    model_manager.make_decisions(decisions_file)
-    print(f"Decisions saved to {decisions_file}")
-except Exception as e:
-    logging.error(f"Error in decision making: {e}")
+        decisions_file = os.path.join(LOG_DIR, 'buy_sell_decisions.csv')
+        model_manager.make_decisions(decisions_file)
+        print(f"Decisions saved to {decisions_file}")
+    except Exception as e:
+        logging.error(f"Error in decision making: {e}")

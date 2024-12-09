@@ -5,6 +5,7 @@ import os
 import json
 from cryptography.fernet import Fernet
 import pandas as pd
+import sys
 
 ALPACA_CREDENTIALS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', 'alpaca_credentials.json')
 ENCRYPTION_KEY_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', 'encryption_key.key')
@@ -32,7 +33,7 @@ def execute_trades():
     credentials = load_credentials()
     if not credentials:
         print("Failed to load API credentials")
-        return
+        return -1
 
     API_KEY = credentials.get("api_key")
     API_SECRET = credentials.get("api_secret")
@@ -42,13 +43,13 @@ def execute_trades():
     # Validate the credentials
     if not API_KEY or not API_SECRET:
         print("API Key or Secret missing.")
-        return
+        return -2
 
     # Load the buy/sell decisions CSV
     csv_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs', 'buy_sell_decisions.csv')
     if not os.path.exists(csv_file):
         print("Error: Buy/Sell decisions file not found.")
-        return
+        return -3
 
     decisions = pd.read_csv(csv_file)
 
@@ -90,6 +91,9 @@ def execute_trades():
                 print(f"Skipped {ticker} (Hold action)")
         except Exception as e:
             print(f"Error executing trade for {ticker}: {str(e)}")
+
+    print("All trades executed successfully.")
+    return 0
 
 if __name__ == "__main__":
     execute_trades()

@@ -6,7 +6,6 @@ from PyQt5.QtCore import Qt
 import qt_main_window as mw
 
 VERSION = "0.0.1"
-PYTHON_EXECUTABLE = sys.executable
 
 if __name__ == "__main__":
     if os.name == "posix":
