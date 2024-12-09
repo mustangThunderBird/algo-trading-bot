@@ -12,11 +12,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from random import uniform
 
-#Initalize transformer pipelines
-sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert/distilbert-base-uncased-finetuned-sst-2-english", device=0)
-summarizer = pipeline("summarization", device=0)
-warnings.filterwarnings('ignore')
-
 filler_texts = [
     "We are experiencing some temporary issues." ,
     "The market data on this page is currently delayed.",
@@ -75,11 +70,7 @@ def basic_cleanup(text):
     cleaned_text = re.sub(whitespace_pattern, ' ', re.sub(filler_pattern,'',cleaned_text)).strip() if isinstance(cleaned_text, str) else cleaned_text
     return cleaned_text
 
-def summarize_article(article_text):
-    summary = summarizer(article_text[:1024], max_length=100, min_length=30, do_sample=False)
-    return summary[0]['summary_text']
-
-def add_sentiment(df:pd.DataFrame):
+def add_sentiment(df:pd.DataFrame, sentiment_pipeline):
     setiments = df['article_text'].apply(lambda text: sentiment_pipeline(text[:1024])[0]['label'] if text != "N/A" else "UNKNOWN")
     df['sentiment'] = setiments
     return df
@@ -103,24 +94,26 @@ def get_article_text(url):
         print(f"Failed to get article text from {url}: {e}")
         return "N/A"
 
-def preprocess_data(df:pd.DataFrame) -> pd.DataFrame:
+def preprocess_data(df:pd.DataFrame, sentiment_pipeline) -> pd.DataFrame:
     try:
         df = df[['summary', 'link', 'published', 'title']]
         with concurrent.futures.ThreadPoolExecutor() as executor:
             article_texts = list(executor.map(get_article_text, df['link']))
         df['article_text'] = article_texts
-        df = add_sentiment(df)
+        df = add_sentiment(df, sentiment_pipeline)
         return df
     except Exception as e:
         return f"Could not process data {e}"
     
-def preprocess_and_update(ticker, data):
-    df = preprocess_data(data)
+def preprocess_and_update(ticker, data, sentiment_pipeline):
+    df = preprocess_data(data, sentiment_pipeline)
     if isinstance(df, str):
         print(df)
     return ticker, df if not isinstance(df, str) else None
 
 def determine_sentiments(progress_callback=None):
+    sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert/distilbert-base-uncased-finetuned-sst-2-english", device=0)
+
     stock_news_frames = fetch_news()
     total_tickers = len(stock_news_frames)
     
@@ -134,7 +127,7 @@ def determine_sentiments(progress_callback=None):
     # Run preprocessing in parallel
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {
-            executor.submit(preprocess_and_update, ticker, data): ticker 
+            executor.submit(preprocess_and_update, ticker, data, sentiment_pipeline): ticker 
             for ticker, data in stock_news_frames.items()
         }
         
@@ -165,4 +158,5 @@ def determine_sentiments(progress_callback=None):
     final_scores.to_csv(os.path.join(os.path.dirname(__file__), 'sentiment_scores.csv'), index=True)
 
 if __name__ == "__main__":
+    warnings.filterwarnings('ignore')
     determine_sentiments()
