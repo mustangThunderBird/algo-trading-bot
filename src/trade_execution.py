@@ -7,11 +7,11 @@ from cryptography.fernet import Fernet
 import pandas as pd
 import sys
 
-ALPACA_CREDENTIALS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', 'alpaca_credentials.json')
+CREDENTIALS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', 'config.json')
 ENCRYPTION_KEY_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', 'encryption_key.key')
 
 def load_credentials():
-    if not os.path.exists(ALPACA_CREDENTIALS_PATH) or not os.path.exists(ENCRYPTION_KEY_PATH):
+    if not os.path.exists(CREDENTIALS_PATH) or not os.path.exists(ENCRYPTION_KEY_PATH):
         return False
     try:
         # Load the encryption key
@@ -21,7 +21,7 @@ def load_credentials():
         cipher = Fernet(encryption_key)
 
         # Load and decrypt credentials
-        with open(ALPACA_CREDENTIALS_PATH, "rb") as f:
+        with open(CREDENTIALS_PATH, "rb") as f:
             encrypted_data = f.read()
         decrypted_data = cipher.decrypt(encrypted_data).decode()
         return json.loads(decrypted_data)

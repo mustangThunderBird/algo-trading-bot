@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QWidget, QVBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem,
     QFileDialog, QMessageBox, QHeaderView, QGroupBox, QGridLayout, QProgressBar, QSpacerItem, QSizePolicy,
-    QLineEdit, QFormLayout, QApplication
+    QLineEdit, QFormLayout, QApplication, QComboBox
 )
 from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -24,6 +24,7 @@ import json
 import traceback
 from fpdf import FPDF
 from cryptography.fernet import Fernet
+from openvino.runtime import Core
 from app import VERSION
 
 
@@ -863,11 +864,11 @@ class SettingsTab(QWidget):
     def __init__(self):
         super().__init__()
         self.layout = QVBoxLayout()
-        self.alpaca_credentials_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', "alpaca_credentials.json")
+        self.config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', "config.json")
         self.encryption_key_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials', "encryption_key.key")
 
         # Title
-        self.title_label = QLabel("Alpaca Account Settings")
+        self.title_label = QLabel("Settings")
         self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 20px;")
         self.title_label.setAlignment(Qt.AlignCenter)
         self.layout.addWidget(self.title_label)
@@ -900,10 +901,17 @@ class SettingsTab(QWidget):
 
         self.layout.addLayout(self.form_layout)
 
+        #Dropdown for Device Selection
+        self.device_combo = QComboBox()
+        self.detect_devices()
+        #self.device_combo.addItems(self.detect_devices())
+        self.device_combo.setCurrentText(self.load_device_preference())
+        self.form_layout.addRow("Training Device:", self.device_combo)
+
         # Save Button
-        self.save_button = QPushButton("Save Credentials")
+        self.save_button = QPushButton("Save Settings")
         self.save_button.setStyleSheet("font-size: 16px; padding: 10px;")
-        self.save_button.clicked.connect(self.save_credentials)
+        self.save_button.clicked.connect(self.save_settings)
         self.layout.addWidget(self.save_button, alignment=Qt.AlignCenter)
 
         # Status Label
@@ -913,8 +921,43 @@ class SettingsTab(QWidget):
 
         self.setLayout(self.layout)
 
+    def detect_devices(self):
+        """return list of available devices"""
+        devices = ["CPU"]
+        try:
+            from tensorflow.python.client import device_lib
+            local_devices = device_lib.list_local_devices()
+            for device in local_devices:
+                if device.device_type == "GPU":
+                    devices.append(f"GPU ({device.name})")
+        except Exception as e:
+            print(f"Error detecting NVIDIA devices: {e}")
+        
+        try:
+            core = Core()
+            available_devices = core.available_devices
+            for device in available_devices:
+                if "GPU" in device.upper():
+                    devices.append(f"GPU ({device})")
+        except Exception as e:
+            print(f"Error detecting Intel devices: {e}")
+
+        self.device_combo.addItems(devices)
+    
+    def load_device_preference(self):
+        """load device preference from file"""
+        if not os.path.exists(self.config_path):
+            return "CPU"
+        try:
+            with open(self.config_path, "r") as f:
+                config = json.load(f)
+            return config.get("training_device", "CPU")
+        except Exception as e:
+            print(f"Error loading device preference: {e}")
+            return "CPU"
+    
     def load_credentials(self):
-        if not os.path.exists(self.alpaca_credentials_path) or not os.path.exists(self.encryption_key_path):
+        if not os.path.exists(self.config_path) or not os.path.exists(self.encryption_key_path):
             return False
         try:
             # Load the encryption key
@@ -924,7 +967,7 @@ class SettingsTab(QWidget):
             cipher = Fernet(encryption_key)
 
             # Load and decrypt credentials
-            with open(self.alpaca_credentials_path, "rb") as f:
+            with open(self.config_path, "rb") as f:
                 encrypted_data = f.read()
             decrypted_data = cipher.decrypt(encrypted_data).decode()
             return json.loads(decrypted_data)
@@ -933,9 +976,10 @@ class SettingsTab(QWidget):
             self.status_label.setStyleSheet("font-size: 16px; color: red;")
             return False
         
-    def save_credentials(self):
+    def save_settings(self):
         api_key = self.api_key_input.text()
         api_secret = self.api_secret_input.text()
+        device = self.device_combo.currentText()
 
         if not api_key or not api_secret:
             self.status_label.setText("Status: Please fill in both fields.")
@@ -943,9 +987,13 @@ class SettingsTab(QWidget):
             return
 
         try:
+            # Save device preference
+            config = {"training_device": device}
+            with open(self.config_path, "w") as f:
+                json.dump(config, f)
             # Encrypt and save credentials securely
             encrypted_data = self.encrypt_credentials(api_key, api_secret)
-            with open(self.alpaca_credentials_path, "wb") as f:
+            with open(self.config_path, "wb") as f:
                 f.write(encrypted_data)
             self.status_label.setText("Status: Credentials saved successfully!")
             self.status_label.setStyleSheet("font-size: 16px; color: green;")
