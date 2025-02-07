@@ -164,6 +164,7 @@ cython_debug/
 #Dont push data to git
 .venv/
 data/
+old_dist/
 *.png
 *.pkl
 *.key
