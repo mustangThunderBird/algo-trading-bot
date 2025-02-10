@@ -7,7 +7,7 @@ import qt_main_window as mw
 
 VERSION = "0.0.2"
 
-if __name__ == "__main__":
+def main():
     # Prevent multiple instances
     if os.getenv("APP_INSTANCE_RUNNING") == "1":
         print("Application is already running.")
@@ -21,8 +21,11 @@ if __name__ == "__main__":
         if sys_name == "Linux":
             os.system("export QT_QPA_PLATFORM=xcb")
     app = QApplication(sys.argv)
-    main_window = mw.MainWindow()
+    main_window = mw.MainWindow(version=VERSION)
     main_window.show()
     sys.exit(app.exec_())
     # Reset the environment variable on exit (optional)
     os.environ["APP_INSTANCE_RUNNING"] = "0"
+
+if __name__ == "__main__":
+    main()

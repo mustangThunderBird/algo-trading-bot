@@ -25,22 +25,22 @@ import traceback
 from fpdf import FPDF
 from cryptography.fernet import Fernet
 from openvino.runtime import Core
-from app import VERSION
+#from app import VERSION
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, version):
         super().__init__()
         self.setWindowTitle("Quant/Qual Bot Dashboard")
         self.setGeometry(100,100,1200,800)
-
+        self.version = version
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
         self.scheduler = Scheduler()
 
         # Create tabs
-        self.welcome_tab = WelcomeTab()
+        self.welcome_tab = WelcomeTab(self.version)
         self.manual_train_tab = ManualTrainTab()
         self.schedule_tab = ScheduleTab(self.scheduler)
         self.buy_sell_tab = BuySellTab()
@@ -71,7 +71,7 @@ class MainWindow(QMainWindow):
             self.performance_tab.plot_graph()
 
 class WelcomeTab(QWidget):
-    def __init__(self):
+    def __init__(self, version):
         super().__init__()
         layout = QVBoxLayout()
 
@@ -114,9 +114,9 @@ class WelcomeTab(QWidget):
         button1_layout.setAlignment(Qt.AlignCenter)
         layout.addLayout(button1_layout)
 
-        verison = QLabel(f"\n\nApp Version: {VERSION}")
-        verison.setAlignment(Qt.AlignCenter)
-        layout.addWidget(verison)
+        verison_label = QLabel(f"\n\nApp Version: {version}")
+        verison_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(verison_label)
         
         # Set the layout
         layout.setAlignment(Qt.AlignTop)
