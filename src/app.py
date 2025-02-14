@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
 import qt_main_window as mw
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 def main():
     # Prevent multiple instances
