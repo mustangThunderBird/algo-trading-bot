@@ -22,6 +22,9 @@ def main():
             os.system("export QT_QPA_PLATFORM=xcb")
     app = QApplication(sys.argv)
     main_window = mw.MainWindow(version=VERSION)
+    app.setStyle('Fusion')
+    with open(os.path.join(os.path.dirname(__file__), 'qss', 'gui_theme.qss'), 'r') as file:
+        app.setStyleSheet(file.read())
     main_window.show()
     sys.exit(app.exec_())
     # Reset the environment variable on exit (optional)
