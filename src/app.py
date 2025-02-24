@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
 import qt_main_window as mw
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 def main():
     # Prevent multiple instances
@@ -22,6 +22,9 @@ def main():
             os.system("export QT_QPA_PLATFORM=xcb")
     app = QApplication(sys.argv)
     main_window = mw.MainWindow(version=VERSION)
+    app.setStyle('Fusion')
+    with open(os.path.join(os.path.dirname(__file__), 'qss', 'gui_theme.qss'), 'r') as file:
+        app.setStyleSheet(file.read())
     main_window.show()
     sys.exit(app.exec_())
     # Reset the environment variable on exit (optional)
