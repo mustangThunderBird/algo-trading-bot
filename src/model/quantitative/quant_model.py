@@ -87,6 +87,7 @@ def compute_macd(series, short_period=12, long_period=26, signal_period=9):
     return macd, signal_line
     
 def save_model(model, filename):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename, 'wb') as f:
         pickle.dump(model, f)
     print(f"Model saved to {filename}")

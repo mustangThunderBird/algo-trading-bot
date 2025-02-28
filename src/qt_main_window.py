@@ -989,11 +989,11 @@ class SettingsTab(QWidget):
         try:
             # Save device preference
             config = {"training_device": device}
-            with open(self.config_path, "w") as f:
+            with open(self.config_path, "w+") as f:
                 json.dump(config, f)
             # Encrypt and save credentials securely
             encrypted_data = self.encrypt_credentials(api_key, api_secret)
-            with open(self.config_path, "wb") as f:
+            with open(self.config_path, "ab") as f:
                 f.write(encrypted_data)
             self.status_label.setText("Status: Credentials saved successfully!")
             self.status_label.setStyleSheet("font-size: 16px; color: green;")
