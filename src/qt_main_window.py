@@ -934,6 +934,7 @@ class SettingsTab(QWidget):
             print(f"Error detecting NVIDIA devices: {e}")
         
         try:
+            from openvino.runtime import Core
             core = Core()
             available_devices = core.available_devices
             for device in available_devices:
