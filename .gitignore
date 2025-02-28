@@ -168,4 +168,4 @@ old_dist/
 *.png
 *.pkl
 *.key
-credentials/alpaca_credentials.json
+credentials/

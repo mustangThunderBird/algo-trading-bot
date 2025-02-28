@@ -967,10 +967,13 @@ class SettingsTab(QWidget):
             cipher = Fernet(encryption_key)
 
             # Load and decrypt credentials
-            with open(self.config_path, "rb") as f:
-                encrypted_data = f.read()
+            with open(self.config_path, "r") as f:
+                config = json.load(f)
+            encrypted_data = config.get("credentials").encode()
             decrypted_data = cipher.decrypt(encrypted_data).decode()
-            return json.loads(decrypted_data)
+            credentials = json.loads(decrypted_data)
+            credentials["training_device"] = config.get("training_device", "CPU")
+            return credentials
         except Exception as e:
             self.status_label.setText(f"Status: Error loading credentials - {str(e)}")
             self.status_label.setStyleSheet("font-size: 16px; color: red;")
@@ -983,18 +986,20 @@ class SettingsTab(QWidget):
 
         if not api_key or not api_secret:
             self.status_label.setText("Status: Please fill in both fields.")
-            self.status_label.setStyleSheet("font-size: 16px; color: red;")
-            return
-
         try:
-            # Save device preference
-            config = {"training_device": device}
-            with open(self.config_path, "w+") as f:
-                json.dump(config, f)
-            # Encrypt and save credentials securely
+            # Save device preference and encrypted credentials together
+            os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+            os.makedirs(os.path.dirname(self.encryption_key_path), exist_ok=True)
+            # Encrypt credentials
             encrypted_data = self.encrypt_credentials(api_key, api_secret)
-            with open(self.config_path, "ab") as f:
-                f.write(encrypted_data)
+            
+            config = {
+                "training_device": device,
+                "credentials": encrypted_data.decode()
+            }
+            with open(self.config_path, "w") as f:
+                json.dump(config, f)
+            
             self.status_label.setText("Status: Credentials saved successfully!")
             self.status_label.setStyleSheet("font-size: 16px; color: green;")
         except Exception as e:
